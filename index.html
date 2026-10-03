@@ -386,14 +386,15 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
       <button type="button" class="iconbtn" style="flex-shrink:0" onclick="TOOLS.eye('key',this)" title="显示 / 隐藏，便于核对">👁</button>
     </div>
     <label>模型名</label>
-    <input id="model" placeholder="deepseek-v4-flash">
+    <input id="model" placeholder="deepseek-flash">
     <div id="modelchips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-      <span class="chip" data-m="deepseek-v4-flash">deepseek-v4-flash</span>
+      <span class="chip" data-m="deepseek-flash">deepseek-flash</span>
+      <span class="chip" data-m="deepseek-v4-pro">deepseek-v4-pro</span>
       <span class="chip" data-m="glm-4.7">glm-4.7</span>
       <span class="chip" data-m="glm-4-flash">glm-4-flash</span>
       <span class="chip" data-m="qwen-plus">qwen-plus</span>
     </div>
-    <div class="hint">默认用 deepseek-v4-flash。开「深度思考」时，若下方填了思考模型就用它，否则沿用当前模型并开启推理。</div>
+    <div class="hint">默认 deepseek-flash（便宜、支持自主调工具；实测两个模型均已开启智能检索能力）。开「深度思考」时，若下方填了思考模型就用它，否则沿用当前模型并开启推理。</div>
     <div class="hint">推荐 DeepSeek（便宜好用）；也支持智谱、通义、OpenAI、本地 Ollama 等兼容接口。</div>
     <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
     <div style="font-size:13px;color:var(--teal);margin:0 0 4px">备用端点（被审查拦截时一键换用）</div>
@@ -1271,7 +1272,7 @@ function cfgOf(which){
   return {
     base: (localStorage.getItem(alt?"sz2_base2":"sz2_base")||(alt?"":"https://api.deepseek.com/v1")).replace(/\/$/,""),
     key : localStorage.getItem(alt?"sz2_key2":"sz2_key")||"",
-    mdl : localStorage.getItem(alt?"sz2_model2":"sz2_model")||(alt?"":"deepseek-v4-flash")
+    mdl : localStorage.getItem(alt?"sz2_model2":"sz2_model")||(alt?"":"deepseek-flash")
   };
 }
 let _lastQ = "";
@@ -1380,6 +1381,11 @@ async function ask(opt){
   const parts = got.flat().filter(Boolean);
   const ctx = parts.map((p,i)=>`〔${i+1}〕${p.src}\n${p.txt}`).join("\n\n").slice(0,14000);
   const hasRef = parts.length > 0;
+  /* ---- 蛇杖二号 · Agent 内核接管判据（P1–P4）----
+     _agTake() 在三处必须判得一致：卡片渲染、委派、降级。
+     开关 sz2_agent 默认开；填 "0" 可在浏览器控制台手动关掉走老直线流程。 */
+  const _agTake = () => localStorage.getItem("sz2_agent") !== "0"
+                     && window.AGENT && !window.AGENT.failed;
   const sys = `你是「蛇杖二号」——以一座临床医学教材库为底座的知识助手，可在课程学习、复习备考、临床思维、病例分析、实验报告、资料整理等场景中提供分析、讲解与办法。给真诚、有见地、能落地的内容。
 
 不要揣测或预设提问者的身份、专业、年级、职业或处境，也不要把任何身份设定套在用户身上；就事论事地回答问题本身。
@@ -1400,20 +1406,24 @@ async function ask(opt){
   + `\n\n` + (MODE_PROMPT[mode] || "");
 
   // 来源卡片（青色 = 文库原文）
-  if(hasRef){
+  // Agent 模式下不渲染：由工具调用轨迹承担「查了什么」，避免和答案里的〔n〕标注对不上
+  if(hasRef && !_agTake()){
     const srcHtml = `<b>本次为你调用的教材原文（${parts.length} 处）：</b>` + parts.map((p,i)=>
       `<div>〔${i+1}〕${esc(p.src)}</div>`).join("");
     addMsg("蛇杖二号", srcHtml, "src");
   }
   // 联网来源卡片（蓝色 = 网络资料）
-  if(netRes.list.length){
-    const netHtml = `<b>联网参考（${netRes.list.length} 条 · 公开网络实时取得，非教材原文）：</b>`
-      + netRes.list.map((x,i)=>`<div>〔网${i+1}〕${esc(x.src)} · ${esc(x.t)}</div>`).join("");
-    addMsg("蛇杖二号", netHtml, "net");
-  } else if(NET.on){
-    addMsg("蛇杖二号",
-      `<b>🌐 联网参考：本轮未取到内容</b><div>${esc(netRes.note || "通道不可达或被过滤，已自动跳过；文库回答不受影响。")}</div>`,
-      "net");
+  // 同上：Agent 模式下联网由模型按需调 net_search，预取的这张卡片不显示
+  if(!_agTake()){
+    if(netRes.list.length){
+      const netHtml = `<b>联网参考（${netRes.list.length} 条 · 公开网络实时取得，非教材原文）：</b>`
+        + netRes.list.map((x,i)=>`<div>〔网${i+1}〕${esc(x.src)} · ${esc(x.t)}</div>`).join("");
+      addMsg("蛇杖二号", netHtml, "net");
+    } else if(NET.on){
+      addMsg("蛇杖二号",
+        `<b>🌐 联网参考：本轮未取到内容</b><div>${esc(netRes.note || "通道不可达或被过滤，已自动跳过；文库回答不受影响。")}</div>`,
+        "net");
+    }
   }
   // 深度思考块（仅深度思考模式创建）
   let tb = null, twrap = null;
@@ -1434,6 +1444,48 @@ async function ask(opt){
   const netTxt = netRes.txt
     ? `【联网参考】（公开网络实时检索所得，仅作背景与时效性补充，不能替代【原文】；与原文冲突时以原文为准）\n${netRes.txt}\n\n`
     : "";
+  /* ================= 蛇杖二号 · Agent 内核（P1–P4）=================
+     把检索权交给模型：让它自己决定查什么、查几轮（上限 5 轮）。
+     位置说明：必须落在 memTxt / netTxt / b / tb 都就绪之后，
+     否则会撞 let/const 的暂时性死区（TDZ）。
+     任何异常都原样落回下面的直线 RAG —— 站点不许白屏，这是硬要求，别删。 */
+  if(_agTake()){
+    try{
+      const _agAns = await window.AGENT.runLoop({
+        q, cfg: visCfg, mdl: visMdl, mode, think,
+        memTxt, netTxt, fileTxt,
+        sysBase: sys,
+        bub: b, thinkBub: tb
+      });
+      if(_agAns != null && String(_agAns).trim()){
+        acc = String(_agAns);
+        busy = false; document.getElementById("send").disabled = false;
+        if(b && b._rec) b._rec.html = esc(b.textContent);
+        if(tb && tb._rec) tb._rec.html = esc(tb.textContent);
+        if(b && acc.trim()){
+          const barEl2 = document.createElement("div");
+          barEl2.className = "expbar";
+          barEl2.innerHTML =
+            `<button class="iconbtn" onclick="TOOLS.toPDF(this)">📄 导出 PDF</button>` +
+            `<button class="iconbtn" onclick="TOOLS.toWord(this)">📝 导出 Word</button>` +
+            `<button class="iconbtn" onclick="TOOLS.diagram(this)">🧩 生成示意图</button>` +
+            `<button class="iconbtn" onclick="TOOLS.quiz(this)">❓ 据此出题</button>` +
+            `<button class="iconbtn" onclick="TOOLS.outline(this)">📚 据此处大纲</button>` +
+            `<button class="iconbtn" onclick="reaskAlt()" title="把上一个问题发到备用端点">🔁 换端点</button>` +
+            `<button class="iconbtn" onclick="reaskRewrite()" title="自动改写成中性问法后重发">✎ 改写重问</button>`;
+          b.parentElement.appendChild(barEl2);
+        }
+        SS.touch();
+        if(acc.trim()) distill(q, acc, cfg);
+        return;
+      }
+      /* 拿不到文本（罕见）：落到下面直线流程再补一遍 */
+    }catch(e){
+      console.warn("[AGENT] 内核异常，已降级为直线 RAG：", e);
+      window.AGENT.failed = true;
+      try{ addMsg("系统", "⚙️ 智能检索内核本次未成功，已自动切换回常规检索作答（不影响使用）。", "sys"); }catch(_){}
+    }
+  }
   try{
     const userText = memTxt + (fileTxt ? `【附件内容】\n${fileTxt}\n\n` : "")
                    + (ctx ? `【原文】\n${ctx}\n\n` : "") + netTxt + `【我的问题】\n${q}`;
@@ -1547,7 +1599,7 @@ function applyFont(){
 }
 function applyModel(){
   const on = localStorage.getItem("sz2_think")==="1";
-  const m = localStorage.getItem("sz2_model")||"deepseek-v4-flash";
+  const m = localStorage.getItem("sz2_model")||"deepseek-flash";
   const tm = (localStorage.getItem("sz2_mdlthink")||"").trim();
   const alt = localStorage.getItem("sz2_model2")||"";
   const hasAlt = !!(localStorage.getItem("sz2_key2")||"").trim();
@@ -2563,7 +2615,7 @@ function closeNet(){ document.getElementById("netmask").style.display = "none"; 
 function openSet(){
   document.getElementById("base").value = localStorage.getItem("sz2_base")||"https://api.deepseek.com/v1";
   document.getElementById("key").value = localStorage.getItem("sz2_key")||"";
-  document.getElementById("model").value = localStorage.getItem("sz2_model")||"deepseek-v4-flash";
+  document.getElementById("model").value = localStorage.getItem("sz2_model")||"deepseek-flash";
   document.getElementById("base2").value = localStorage.getItem("sz2_base2")||"";
   document.getElementById("key2").value  = localStorage.getItem("sz2_key2")||"";
   document.getElementById("model2").value= localStorage.getItem("sz2_model2")||"";
@@ -3075,5 +3127,11 @@ renderNetStat();
   }, 1200);
 })();
 </script>
+<!-- 蛇杖二号 · Agent 内核
+     位置铁律：必须放在上面两个内联 <script> 之后。
+     它引用了 DOCS / search / sliceSec / headSpan / MEM / NET / TOOLS / addMsg / typeInto
+     这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
+     不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
+<script src="agent.js"></script>
 </body>
 </html>
