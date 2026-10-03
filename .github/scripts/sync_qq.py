@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""蛇杖二号 · 从蛇杖一号同步「班群摘要 / 公告待办」
+"""蛇杖二号 · 从蛇杖一号同步「官网公告待办」
 
-设计要点（三条硬保证）：
+⚠️ 2026-10-04 变更：班群摘要不再同步到公开仓库
+----------------------------------------------------------------
+原来这份脚本会一并拉一号的 data/qq_digest.json（班群消息摘要）推进二号公开仓库。
+但主公 2026-09-30 立下的红线优先级高于一切历史决策：
+
+    「群聊内容（QQ群/班级群）只落本机，绝不推进任何公开仓库。」
+
+那份摘要此前长期挂在公开 GitHub 上全网可读（内容涉及班级报名、补报名截止、
+志愿时长、义诊培训等内部事务），已于 2026-10-04 从远端删除（commit 9e2b079）。
+本脚本据此摘掉 qq_digest 的同步，只留官网公告。
+本机还留着那份文件供本地看板使用 —— 本机可以读，公网不行。
+
+起作用的三条硬保证：
   1. 只读一号的【公开数据文件】，不碰一号任何写接口、不碰一号云函数 → 一号完全无感。
-  2. 只增不减：qq_digest 按 id 做并集合并，宁可留着也不缩小，杜绝"覆盖式冲掉真消息"。
+  2. 只对 data/todo.json 做镜像 —— 那是纯官网/图书馆公告，本来就是公开信息，
+     也是 Agent 的 get_todo 工具唯一数据源。
   3. 无凭据：只读 public 仓库的 raw 文件，脚本里不出现任何 token。
+  4. 班群内容零触碰：同步清单里不再出现任何 qq_* 文件。
 
-由 .github/workflows/sync-qq.yml 每 30 分钟调用一次。
+由 .github/workflows/sync-todo.yml 每 30 分钟调用一次。
 """
 import json
 import os
@@ -18,8 +32,11 @@ import urllib.request
 SZ1 = "https://raw.githubusercontent.com/bicheng2026/shezhang1/main/"
 
 # (本地路径, 远端路径, 模式) —— union: 按 id 并集合并；mirror: 一号为权威源直接镜像
+#
+# ⚠️ 2026-10-04：这里原本还有一行 qq_digest.json 的 union 同步，已按隐私红线删除。
+#    班群内容不进任何公开仓库，一号二号都不进。本机要用的话走本地 bridge 写文件，
+#    那份文件只在本地（.gitignore 已排除），不上云、不跨库。
 FILES = [
-    ("data/qq_digest.json", "data/qq_digest.json", "union"),
     ("data/todo.json", "data/todo.json", "mirror"),
 ]
 
