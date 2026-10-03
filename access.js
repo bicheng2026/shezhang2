@@ -196,7 +196,7 @@ var GATE = null;
 async function getGate(force){
   if(GATE && !force && GATE.exp > Date.now()) return GATE;
   try{
-    var r = await fetch("https://1499683192-f4e14euqer.ap-guangzhou.tencentscf.com/gate", {cache:"no-store"});
+    var r = await fetch("https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com/gate", {cache:"no-store"});
     var j = await r.json();
     if(j && j.token) GATE = {token:j.token, exp: Date.now() + (j.ttl||120000)};
   }catch(e){ GATE = null; }
@@ -206,7 +206,7 @@ window.getGate = getGate;
 
 /* ==================== 4. 管理员后台 ==================== */
 /* 云函数地址：管理员后台的所有动作都发到它（token 在云端，不经过浏览器） */
-var CLOUD = 'https://1499683192-f4e14euqer.ap-guangzhou.tencentscf.com';
+var CLOUD = 'https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com';
 
 window.callCloud = async function(action, obj){
   var r = await fetch(CLOUD + '/admin?action=' + encodeURIComponent(action), {
