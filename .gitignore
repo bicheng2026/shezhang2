@@ -1,0 +1,9 @@
+# 蛇杖二号 · 推送排除清单
+#
+# data/qq_feed.json —— 只给 AI 对话引用的班群信源（内部数据），不进公开仓库。
+#   一号仓库同样没有推它。需要公开给同学的脱敏摘要是 data/qq_digest.json，那个照推。
+data/qq_feed.json
+
+# 本机运行时产物
+*.log
+bridge/

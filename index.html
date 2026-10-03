@@ -1,0 +1,3079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>蛇杖二号 · 文库问答</title>
+<!-- PWA：可安装到桌面 / 手机主屏 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0e1518">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<meta name="application-name" content="蛇杖二号">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="蛇杖二号">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#0e1518; --bg2:#151f23; --card:#19252a; --line:#2b3b41;
+  --ink:#e3eef0; --dim:#8ba0a7; --red:#c0392b; --teal:#5ad1c0; --ok:#7fb069;
+  --blue:#6ea8d8;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg);color:var(--ink);
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+}
+/* ---------- 密码锁 ---------- */
+#lock{position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,#172530,#0b1114);
+  display:flex;align-items:center;justify-content:center;z-index:99;padding:20px}
+#lock .box{width:100%;max-width:360px;text-align:center}
+#lock h1{font-size:22px;margin:0 0 6px;letter-spacing:3px;color:var(--teal)}
+#lock p{color:var(--dim);font-size:13px;margin:0 0 22px}
+#lock input{width:100%;padding:13px 15px;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg2);color:var(--ink);font-size:16px;text-align:center;letter-spacing:2px}
+#lock button{margin-top:12px;width:100%;padding:13px;border:0;border-radius:10px;
+  background:linear-gradient(180deg,#1d7a6d,#12564c);color:#fff;font-size:16px;cursor:pointer}
+#lock .err{color:#e07a6a;font-size:13px;margin-top:12px;min-height:20px}
+/* ---------- 主界面 ---------- */
+#app{display:none;flex-direction:row;height:100%;max-width:none;margin:0}
+header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;
+  background:linear-gradient(180deg,#16232a,#111a1e)}
+header .t{font-size:16px;letter-spacing:2px;color:var(--teal);font-weight:600}
+header .s{font-size:12px;color:var(--dim)}
+header .sp{flex:1}
+.iconbtn{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:8px;
+  padding:6px 11px;font-size:13px;cursor:pointer}
+.iconbtn:hover{color:var(--ink);border-color:var(--teal)}
+#chat{flex:1;overflow-y:auto;padding:18px 16px 8px}
+.msg{margin-bottom:20px;animation:fade .25s}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}}
+.msg .who{font-size:12px;color:var(--dim);margin-bottom:6px;letter-spacing:1px}
+.msg.me .who{color:var(--teal)}
+.bubble{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+  white-space:pre-wrap;word-break:break-word;font-size:var(--a-fs,15px);color:var(--a-color,var(--ink))}
+.msg.me .bubble{background:#1b2d33;border-color:#2f4a52}
+.bubble.src{background:transparent;border:0;padding:0 0 8px;font-size:12.5px;color:var(--dim)}
+.bubble.src b{color:var(--teal);font-weight:500}
+.bubble.src div{padding:4px 0;border-bottom:1px dashed var(--line)}
+/* 联网参考：蓝色调，与文库来源（青色）明确区分 —— 一眼看出哪条不是原文 */
+.bubble.net{background:transparent;border:0;padding:0 0 8px;font-size:12.5px;color:var(--dim)}
+.bubble.net b{color:var(--blue);font-weight:500}
+.bubble.net div{padding:4px 0;border-bottom:1px dashed var(--line)}
+.bubble.sys{background:transparent;border:0;padding:0 0 8px;font-size:12px;color:var(--dim);opacity:.85}
+.bubble.sys b{color:var(--dim);font-weight:500}
+/* 联网面板：通道列表行 */
+.srcrow{display:flex;align-items:flex-start;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line);
+  font-size:12.5px;line-height:1.6}
+.srcrow .nm{flex:1;min-width:0}
+.srcrow .nm i{font-style:normal;color:var(--dim);font-size:11px;display:block;margin-top:3px}
+.srcrow .tag{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:9px;
+  border:1px solid #6b4a3a;color:#d99a7a;white-space:nowrap;margin-left:6px;vertical-align:1px}
+.srcrow .st{font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--line);
+  color:var(--dim);white-space:nowrap;flex-shrink:0;margin-top:1px}
+.srcrow .st.ok{border-color:var(--ok);color:var(--ok)}
+.srcrow .st.bad{border-color:#8a4a3f;color:#e07a6a}
+  .msg.think .bubble{background:transparent;border:1px dashed var(--line);font-size:12px;color:var(--dim);padding:10px 14px}
+  .msg.think .who{cursor:pointer;user-select:none}
+#bar{padding:10px 16px 16px;border-top:1px solid var(--line);background:var(--bg2)}
+#bar .row{display:flex;gap:8px;align-items:flex-end}
+#q{flex:1;min-height:46px;max-height:130px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+  background:var(--bg);color:var(--q-color,var(--ink));font-size:var(--q-fs,15px);line-height:1.6;resize:none;outline:none}
+#q:focus{border-color:var(--teal)}
+#send{padding:0 20px;height:46px;border:0;border-radius:12px;background:linear-gradient(180deg,#1d7a6d,#12564c);
+  color:#fff;font-size:15px;cursor:pointer;flex-shrink:0}
+#send:disabled{opacity:.45;cursor:default}
+.tip{font-size:11.5px;color:var(--dim);margin-top:8px;text-align:center}
+.thinkbtn{display:block;margin:0 0 8px;padding:7px 12px;border:1px solid var(--line);border-radius:20px;background:transparent;color:var(--dim);font-size:12.5px;cursor:pointer}
+.thinkbtn.on{border-color:var(--teal);color:var(--teal);background:rgba(90,209,192,.12)}
+/* ---------- 设置 ---------- */
+#mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;
+  align-items:center;justify-content:center;padding:20px}
+#set{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:20px;
+  width:100%;max-width:420px;max-height:86vh;overflow-y:auto}
+/* ---------- 会话历史 / 长期记忆 / 联网参考 面板 ---------- */
+#sesmask,#memmask,#netmask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;
+  align-items:center;justify-content:center;padding:20px}
+#ses,#mem,#net{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:20px;
+  width:100%;max-width:440px;max-height:86vh;overflow-y:auto}
+#ses h3,#mem h3,#net h3{margin:0 0 14px;font-size:16px;color:var(--teal)}
+.srow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.srow .tt{flex:1;font-size:13.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow.cur .tt{color:var(--teal)}
+.srow button,.mrow .del{font-size:11.5px;color:var(--dim);cursor:pointer;border:1px solid var(--line);
+  border-radius:6px;padding:2px 7px;background:transparent}
+.srow button:hover,.mrow .del:hover{border-color:var(--teal);color:var(--ink)}
+.mrow{display:flex;align-items:flex-start;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.mrow .tx{flex:1;font-size:13px;line-height:1.6}
+.mrow.off .tx{opacity:.45}
+#memcnt{color:var(--teal);font-size:11px}
+#set h3{margin:0 0 14px;font-size:16px;color:var(--teal)}
+#set label{display:block;font-size:12.5px;color:var(--dim);margin:12px 0 5px}
+#set input,#set select{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);font-size:14px}
+#set .btn,#ses .btn,#mem .btn,#net .btn{margin-top:18px;width:100%;padding:12px;border:0;border-radius:10px;background:var(--red);
+  color:#fff;font-size:15px;cursor:pointer}
+#set .close,#ses .close,#mem .close,#net .close{margin-top:8px;width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;
+  background:transparent;color:var(--dim);cursor:pointer}
+  .chip{font-size:12px;padding:4px 9px;border:1px solid var(--line);border-radius:20px;color:var(--dim);cursor:pointer}
+  .chip:hover{border-color:var(--teal);color:var(--ink)}
+.hint{font-size:11.5px;color:var(--dim);margin-top:5px}
+#loading{text-align:center;color:var(--dim);padding:40px 0;font-size:13px}
+mark{background:rgba(90,209,192,.28);color:var(--teal);padding:0 2px;border-radius:2px}
+/* ---------- 停用遮罩（站长 deploy --down 触发）---------- */
+#down{position:fixed;inset:0;background:radial-gradient(circle at 50% 30%,#172530,#0b1114);
+  display:none;align-items:center;justify-content:center;z-index:999;padding:24px;text-align:center}
+#down .box{max-width:380px}
+#down h1{font-size:22px;letter-spacing:3px;color:var(--teal);margin:0 0 12px}
+#down p{color:var(--dim);font-size:14px;line-height:1.9}
+#down .by{font-size:12px;margin-top:18px;opacity:.55}
+/* ---------- 附件条 / 回答工具条 / 拖拽提示 ---------- */
+#attbar{align-items:center}
+.atchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  border-radius:9px;padding:4px 8px 4px 4px;font-size:12px;color:var(--dim);background:var(--bg)}
+.atchip img{width:34px;height:34px;object-fit:cover;border-radius:6px;display:block}
+.atchip b{font-weight:400;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atchip i{cursor:pointer;font-style:normal;color:#e07a6a;padding:0 3px;font-size:14px}
+.expbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.expbar .iconbtn{font-size:11.5px;padding:4px 9px}
+body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";position:fixed;inset:0;z-index:80;
+  background:rgba(14,21,24,.88);color:var(--teal);display:flex;align-items:center;justify-content:center;
+  font-size:17px;letter-spacing:2px;border:2px dashed var(--teal);pointer-events:none}
+/* ============ 桌面版：布局 / 侧边栏 / 阅读（对齐窑洞一号）============ */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: #2f4a52; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+#main{ flex:1; display:flex; flex-direction:column; min-width:0; height:100%; }
+
+/* 侧边栏 */
+#side{ width:288px; flex-shrink:0; background:linear-gradient(180deg,#16232a,#111a1e);
+  border-right:1px solid var(--line); display:flex; flex-direction:column; height:100%; overflow:hidden; }
+#side .brand{ display:flex; align-items:center; gap:11px; padding:16px 16px 14px; border-bottom:1px solid var(--line); }
+#side .logo{ width:38px; height:38px; border-radius:10px; flex-shrink:0;
+  background:radial-gradient(circle at 35% 30%,#7fe3d4,var(--teal)); color:#06201d;
+  display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700;
+  box-shadow:0 2px 10px rgba(90,209,192,.35); }
+#side .bt{ font-size:17px; letter-spacing:3px; color:var(--teal); font-weight:600; }
+#side .bs{ font-size:11px; color:var(--dim); letter-spacing:1px; margin-top:2px; }
+.sidebox{ padding:12px 12px 8px; }
+.sideSearch{ width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line);
+  background:var(--bg); color:var(--ink); font-size:13.5px; outline:none; }
+.sideSearch:focus{ border-color:var(--teal); }
+.doclist{ flex:1; overflow-y:auto; padding:4px 8px 12px; }
+.doclist .cat{ font-size:11.5px; color:var(--teal); letter-spacing:2px; padding:14px 8px 6px; opacity:.85; }
+.doclist .doc{ padding:8px 10px; border-radius:8px; font-size:13.5px; color:var(--ink);
+  cursor:pointer; line-height:1.5; margin:1px 0; border:1px solid transparent; }
+.doclist .doc:hover{ background:var(--card); }
+.doclist .doc.on{ background:rgba(90,209,192,.14); border-color:rgba(90,209,192,.4); color:var(--teal); }
+.sidefoot{ padding:10px 16px; border-top:1px solid var(--line); font-size:11px; color:var(--dim); letter-spacing:1px; }
+
+/* 阅读视图 */
+#reader{ display:none; flex-direction:column; flex:1; min-width:0; height:100%; background:var(--bg); }
+.rdhead{ display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#16232a,#111a1e); }
+.rdmeta{ min-width:0; }
+.rdt{ font-size:15px; color:var(--teal); font-weight:600; letter-spacing:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rds{ font-size:11.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.rdbodywrap{ flex:1; display:flex; min-height:0; }
+.rdlist{ width:230px; flex-shrink:0; overflow-y:auto; border-right:1px solid var(--line); padding:8px; background:var(--bg2); }
+.rdlist .chap{ display:block; width:100%; text-align:left; padding:8px 10px; margin:2px 0; border-radius:8px;
+  background:transparent; border:1px solid transparent; color:var(--ink); font-size:13px; line-height:1.5; cursor:pointer; }
+.rdlist .chap:hover{ background:var(--card); }
+.rdlist .chap.on{ background:rgba(90,209,192,.14); border-color:rgba(90,209,192,.4); color:var(--teal); }
+.rdtext{ flex:1; overflow-y:auto; padding:26px 34px 60px; }
+.rdhint{ color:var(--dim); font-size:13px; padding:30px 10px; text-align:center; }
+.rdchap{ font-size:20px; color:var(--teal); font-weight:600; letter-spacing:1px; margin:0 0 16px;
+  padding-bottom:12px; border-bottom:1px solid var(--line); }
+.rdbody{ font-size:16px; line-height:2.0; color:var(--ink); white-space:pre-wrap; word-break:break-word; max-width:820px; }
+
+/* 文库首页 */
+.home{ max-width:760px; margin:0 auto; padding:10px 4px; }
+.homeh{ font-size:24px; color:var(--teal); letter-spacing:2px; margin:6px 0 10px; }
+.homep{ color:var(--dim); font-size:14px; line-height:1.9; margin:0 0 22px; }
+.homegrid{ display:flex; gap:14px; margin-bottom:26px; }
+.homecard{ flex:1; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; text-align:center; }
+.homecard .hc{ font-size:26px; color:var(--red); font-weight:700; }
+.homecard div:last-child{ font-size:12.5px; color:var(--dim); margin-top:6px; }
+.homet{ font-size:13px; color:var(--teal); letter-spacing:1px; margin:6px 0 12px; }
+.chips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+.gchip{ font-size:12.5px; padding:6px 12px; border-radius:20px; border:1px solid var(--line); color:var(--ink); }
+.gchip:hover{ border-color:var(--teal); color:var(--teal); }
+.hometip{ color:var(--dim); font-size:13px; line-height:1.9; border-top:1px dashed var(--line); padding-top:16px; }
+
+/* ============ 手机端适配：侧栏/章节列表变抽屉（对齐窑洞一号）============ */
+#sidemask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:55}
+#hambtn{display:none}
+#rdlistbtn{display:none}
+@media (max-width:768px){
+  #hambtn{display:inline-block}
+  #side{
+    position:fixed;top:0;left:0;bottom:0;height:100%;
+    width:84%;max-width:320px;z-index:60;
+    transform:translateX(-100%);transition:transform .25s ease;
+    box-shadow:0 0 30px rgba(0,0,0,.5);
+  }
+  body.side-open #side{transform:translateX(0)}
+  body.side-open #sidemask{display:block}
+  #main{width:100%}
+  header{flex-wrap:wrap;gap:6px}
+  header .iconbtn{font-size:12px;padding:5px 9px}
+  header .t{font-size:15px}
+  #rdlistbtn{display:inline-block}
+  .rdlist{
+    position:fixed;top:0;left:0;bottom:0;height:100%;
+    width:80%;max-width:300px;z-index:45;
+    transform:translateX(-100%);transition:transform .25s ease;
+    box-shadow:0 0 24px rgba(0,0,0,.5);
+  }
+  body.reader-list-open .rdlist{transform:translateX(0)}
+  .rdtext{padding:18px 16px 50px}
+  .home{padding:8px 4px}
+}
+</style>
+</head>
+<body>
+
+
+<div id="down">
+  <div class="box">
+    <h1>蛇 杖 一 号</h1>
+    <p id="downmsg">本站维护中，暂时停用。</p>
+    <p class="by">本工具由江德胜出品</p>
+  </div>
+</div>
+<div id="lock">
+  <div class="box">
+    <h1>蛇 杖 一 号</h1>
+    <p>临床医学原文知识库 · 请输入访问密码</p>
+    <input id="pw" type="password" placeholder="访问密码" autocomplete="current-password">
+    <button onclick="unlock()">进 入</button>
+    <div class="err" id="pwerr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidemask" onclick="closeSide()"></div>
+  <aside id="side">
+    <div class="brand">
+      <div class="logo">⚕</div>
+      <div><div class="bt">蛇杖二号</div><div class="bs">桌面版 · 离线文库</div></div>
+    </div>
+    <div class="sidebox"><input id="sideSearch" class="sideSearch" placeholder="搜教材 / 章节…" oninput="filterDocs(this.value)"></div>
+    <div id="doclist" class="doclist"></div>
+    <div class="sidefoot" id="sidefoot">载入中…</div>
+  </aside>
+  <div id="main">
+  <header>
+    <button id="hambtn" class="iconbtn" onclick="toggleSide()">☰</button>
+    <div>
+      <div class="t">蛇杖二号</div>
+      <div class="s" id="stat">正在载入索引…</div>
+    <div class="s" id="curmodel" style="font-size:11px">中继：—</div>
+    </div>
+    <div class="sp"></div>
+    <button class="iconbtn" onclick="openSess()" title="历史会话">会话</button>
+    <button class="iconbtn" onclick="openMem()" title="长期记忆">记忆<span id="memcnt"></span></button>
+    <button class="iconbtn" onclick="openSet()">设置</button>
+    <button class="iconbtn" onclick="renderHome()">📚 文库</button>
+    <button class="iconbtn" id="installBtn" style="display:none" onclick="szInstall()">📲 安装</button>
+  </header>
+  <div id="updbar" style="display:none;align-items:center;gap:10px;padding:9px 16px;
+       background:linear-gradient(90deg,rgba(90,209,192,.20),rgba(90,209,192,.05));
+       border-bottom:1px solid var(--teal);font-size:13px;color:var(--teal)">
+    <span style="flex:1">🔄 题库/文库有新内容，刷新即可载入</span>
+    <button class="iconbtn" style="border-color:var(--teal);color:var(--teal)"
+            onclick="hardReload()">立即刷新</button>
+  </div>
+  <div id="chat"><div id="loading">正在载入文库索引…</div></div>
+  <div id="bar">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      <button class="thinkbtn" style="margin:0" onclick="document.getElementById('filein').click()">📎 上传</button>
+      <button id="netbtn" class="thinkbtn" style="margin:0" onclick="openNet()">🌐 联网：关</button>
+      <button id="thinkbtn" class="thinkbtn" style="margin:0" onclick="toggleThink()" title="开启后模型会先推理再作答；设置面板里也有开关">💭 深度思考：关</button>
+      <span id="modetag" style="display:none;font-size:12px;color:var(--teal);border:1px solid var(--teal);border-radius:20px;padding:5px 11px;cursor:pointer" onclick="askMode('')" title="点击退出"></span>
+    </div>
+    <div id="attbar" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <input type="file" id="filein" multiple style="display:none"
+           accept="image/*,.pdf,.docx,.doc,.txt,.md,.csv,.json">
+    <div class="row">
+      <textarea id="q" rows="1"></textarea>
+      <button id="send" onclick="ask()">发送</button>
+    </div>
+    <div class="tip">教材原文优先，回答可追溯出处；仅供学习参考，不构成诊疗意见。Enter 发送 / Shift+Enter 换行</div>
+  </div>
+  <div id="reader" style="display:none">
+    <div class="rdhead">
+      <button class="iconbtn" onclick="showChat()">← 返回对话</button>
+      <button id="rdlistbtn" class="iconbtn" onclick="toggleRdList()">☰ 目录</button>
+      <div class="rdmeta"><div id="rdTitle" class="rdt">蛇杖二号 · 文库</div><div id="rdSub" class="rds"></div></div>
+      <div class="sp"></div>
+      <button class="iconbtn" onclick="renderHome()">🏠 总览</button>
+    </div>
+    <div class="rdbodywrap">
+      <div id="rdList" class="rdlist"></div>
+      <div id="rdText" class="rdtext"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="netmask">
+  <div id="net">
+    <h3>联网参考</h3>
+    <div class="hint" style="margin:-8px 0 12px;line-height:1.8">
+      联网只做<b style="color:var(--blue)">时效性补充</b>：回答的骨架与依据始终是你的文库原文。<br>
+      联网内容单独取用、单独标注（蓝色），<b>不写入文库、不进长期记忆</b>，刷新即清。
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--ink);line-height:1.6">
+      <input type="checkbox" id="netsw" onchange="NET.setSw(this.checked)" style="width:auto;margin:3px 0 0;flex-shrink:0">
+      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">每轮提问自动并发检索，6 秒硬超时；超时或不通则自动跳过，不影响文库问答。</span></span>
+    </label>
+
+    <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">联网信息来源</div>
+    <div class="hint" style="margin:0 0 6px;line-height:1.8">
+      <b style="color:#7fb069">国内直连</b>：博查 / 智谱，需自备搜索 API Key，毫秒级响应，<b>无需科学上网</b>（Key 只存本机浏览器）；<br>
+      <b style="color:#d99a7a">需科学上网</b>：维基百科 / Jina / 必应，免 Key，但境内直连不可达。
+    </div>
+    <div class="hint" style="margin:0 0 8px;line-height:1.8">每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索（例如你只想用博查、不想让其它源掺进来）。</div>
+    <div id="netlist"></div>
+
+    <button class="btn" onclick="NET.probeAll()">检测各通道连通性</button>
+    <div id="netprobe" class="hint" style="margin-top:10px;line-height:1.8"></div>
+
+    <div class="hint" id="netstat" style="margin-top:14px"></div>
+    <button class="close" onclick="NET.reset()">重置本次联网统计</button>
+    <button class="close" onclick="closeNet()">关闭</button>
+  </div>
+</div>
+
+<div id="sesmask">
+  <div id="ses">
+    <h3>历史会话</h3>
+    <div id="seslist"></div>
+    <button class="btn" onclick="newSession()">新建会话</button>
+    <button class="close" onclick="closeSess()">关闭</button>
+    <button class="close" onclick="SS.clearAll()">清空全部</button>
+    <div class="hint">会话保存在本机浏览器，换设备不同步。条数过多会占用浏览器存储，可随手删除。</div>
+  </div>
+</div>
+
+<div id="memmask">
+  <div id="mem">
+    <h3>长期记忆</h3>
+    <div class="hint" style="margin:-8px 0 10px">每次回答后由模型后台自动提炼。勾选者才会注入之后的提问 —— 接入由你自主选择。</div>
+    <div id="memlist"></div>
+    <button class="btn" onclick="addMemManual()">手动添加一条</button>
+    <button class="close" onclick="closeMem()">关闭</button>
+    <button class="close" onclick="MEM.clearAll()">清空全部</button>
+  </div>
+</div>
+
+<div id="mask">
+  <div id="set">
+    <h3>设置</h3>
+    <label>接口地址（兼容 OpenAI 的 /chat/completions）</label>
+    <input id="base" placeholder="https://api.deepseek.com/v1">
+    <label>API Key（仅保存在本机浏览器）</label>
+    <div style="display:flex;gap:6px">
+      <input id="key" type="password" placeholder="sk-..." autocomplete="new-password" autocapitalize="off" spellcheck="false" style="flex:1">
+      <button type="button" class="iconbtn" style="flex-shrink:0" onclick="TOOLS.eye('key',this)" title="显示 / 隐藏，便于核对">👁</button>
+    </div>
+    <label>模型名</label>
+    <input id="model" placeholder="deepseek-v4-flash">
+    <div id="modelchips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+      <span class="chip" data-m="deepseek-v4-flash">deepseek-v4-flash</span>
+      <span class="chip" data-m="glm-4.7">glm-4.7</span>
+      <span class="chip" data-m="glm-4-flash">glm-4-flash</span>
+      <span class="chip" data-m="qwen-plus">qwen-plus</span>
+    </div>
+    <div class="hint">默认用 deepseek-v4-flash。开「深度思考」时，若下方填了思考模型就用它，否则沿用当前模型并开启推理。</div>
+    <div class="hint">推荐 DeepSeek（便宜好用）；也支持智谱、通义、OpenAI、本地 Ollama 等兼容接口。</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-size:13px;color:var(--teal);margin:0 0 4px">备用端点（被审查拦截时一键换用）</div>
+    <label>备用接口地址</label>
+    <input id="base2" placeholder="https://open.bigmodel.cn/api/paas/v4">
+    <label>备用 API Key</label>
+    <div style="display:flex;gap:6px">
+      <input id="key2" type="password" placeholder="sk-..." autocomplete="new-password" autocapitalize="off" spellcheck="false" style="flex:1">
+      <button type="button" class="iconbtn" style="flex-shrink:0" onclick="TOOLS.eye('key2',this)" title="显示 / 隐藏">👁</button>
+    </div>
+    <label>备用模型名</label>
+    <input id="model2" placeholder="glm-4.7">
+    <div class="hint">填好备用端点后，底部「🔁 换端点重问」可把同一问题发到另一家服务商——各家尺度不同，此路不通走彼路。备用 Key 与主链路同样只存本机浏览器。</div>
+    <label style="display:flex;align-items:flex-start;gap:8px;color:var(--ink);margin:12px 0 5px">
+      <input type="checkbox" id="thinksw" onchange="setThink(this.checked)" style="width:auto;flex-shrink:0;margin-top:4px">
+      <span>默认开启深度思考<br><span style="color:var(--dim);font-size:11.5px">也可以在输入框直接敲 <b>/think</b> 随时切换</span></span>
+    </label>
+    <label>深度思考模型（可选，留空则沿用上面模型）</label>
+    <input id="mdlthink" placeholder="留空 = 沿用当前模型">
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-size:13px;color:var(--teal);margin:0 0 4px">识图 / 示意图 / 绘图</div>
+    <div class="hint" style="margin:0 0 12px;line-height:1.8">
+      识图和生图<b>共用下面这一套接口</b>，只是模型名不同 —— 例如都走千问，识图用 VL 模型、生图用 image 模型。<br>
+      <b>留空则自动用上面的主接口与主 Key</b>。所以主模型用 deepseek、识图/生图用千问，互不影响。
+    </div>
+    <label>多模态接口地址（识图与生图共用）</label>
+    <input id="ibase" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+    <label>多模态 API Key（识图与生图共用）</label>
+    <div style="display:flex;gap:6px">
+      <input id="ikey" type="password" placeholder="sk-..." autocomplete="new-password" autocapitalize="off" spellcheck="false" style="flex:1">
+      <button type="button" class="iconbtn" style="flex-shrink:0" onclick="TOOLS.eye('ikey',this)" title="显示 / 隐藏">👁</button>
+    </div>
+    <label>识图模型（传图时自动用它；留空则用主模型）</label>
+    <input id="vmodel" placeholder="如 qwen3-vl-plus、glm-4v-flash、gpt-4o-mini">
+    <div id="vchips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+      <span class="chip" data-v="qwen3-vl-plus">qwen3-vl-plus</span>
+      <span class="chip" data-v="qwen-vl-plus">qwen-vl-plus</span>
+      <span class="chip" data-v="glm-4v-flash">glm-4v-flash</span>
+      <span class="chip" data-v="glm-4.1v-thinking-flash">glm-4.1v-thinking-flash</span>
+      <span class="chip" data-v="gpt-4o-mini">gpt-4o-mini</span>
+    </div>
+    <div class="hint">需要该模型支持图片输入（OpenAI 的 image_url 格式）。传图后自动切换到它。</div>
+    <label>生图模型（/draw 与「AI 绘图」用它）</label>
+    <input id="imodel" placeholder="如 qwen-image-2、cogview-3-flash">
+    <div class="hint">AI 绘图不读文库，只是按描述作画；要严格依据教材内容的图，请用回答下方的「🧩 生成示意图」（它读的是文库原文）。</div>
+    <label>示意图模型（可选，留空则沿用主模型）</label>
+    <input id="dmodel" placeholder="留空 = 沿用当前模型">
+    <div class="hint">「生成示意图」会要求模型输出 SVG 矢量图，代码能力强的模型效果更好。</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <label>修改访问密码（留空则保持原密码）</label>
+    <input id="npw" type="password" placeholder="新密码">
+    <button class="btn" onclick="saveSet()">保存</button>
+    <button class="close" onclick="closeSet()">关闭</button>
+    <div class="hint" style="margin-top:14px">提示：换设备/换浏览器后，密码恢复为初始密码，需重新设置。</div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-size:13px;color:var(--teal);margin:4px 0 0">外观调节（输入框 / 回答 分开）</div>
+    <label>输入框字体大小</label>
+    <input id="qfs" type="range" min="12" max="24" value="15">
+    <label>输入框文字颜色</label>
+    <input id="qcolor" type="color" value="#e3eef0">
+    <label>回答字体大小</label>
+    <input id="afs" type="range" min="12" max="26" value="15">
+    <label>回答文字颜色</label>
+    <input id="acolor" type="color" value="#e3eef0">
+    <label>回答显示速度（字/秒，0=即时；默认25）</label>
+    <input id="tspeed" type="range" min="0" max="120" step="5" value="25">
+    <button class="close" onclick="hardReload()">🔄 强制刷新（清缓存 · 载入最新版）</button>
+    <button class="btn" onclick="clearLocal()" style="background:var(--line)">清除本机数据（退出并清空配置）</button>
+    <div class="hint" id="verhint" style="margin-top:8px">当前版本：载入中…</div>
+    <div class="hint" style="margin-top:6px">仅清除你当前这台设备的数据（密码、API Key、会话），不影响他人。清除后需重新输入密码与 Key。</div>
+    <div style="margin-top:16px;font-size:11.5px;color:var(--dim);line-height:1.9">
+      <b style="color:var(--teal)">关于蛇杖二号</b><br>
+      主理人：江德胜 · 出品<br>
+      文库：临床医学教材原文与课程资料（版权归原出版社，仅作个人学习使用）<br>
+      本工具输出仅供学习与思路参考，<b>不构成任何诊疗意见</b>；身体不适请就医。<br>
+      本页面工具著作权归江德胜所有，转载请保留署名。
+    </div>
+  </div>
+</div>
+
+<script>
+/**
+ * 蛇杖二号 · 运行时配置 + 临时口令 + 管理员后台
+ * ------------------------------------------------------------------
+ * 为什么不用「把密码哈希写死在 index.html 里」：那样改一次密码就得重新部署网页，
+ * 而且哈希会暴露在源码里。这里改成：**密码哈希放 GitHub 的 data/access.json**，
+ * 页面启动时读它 → 管理员在后台改一次，全网刷新即刻生效，不用重新部署。
+ *
+ * 文件：data/access.json（由管理员后台写入，公开仓库但只存 PBKDF2 哈希，不存明文）
+ *   {
+ *     "lock":  true,                 ← 是否启用密码锁
+ *     "salt":  "…",                   ← 随机盐
+ *     "admin": "…",                  ← 管理员密码哈希
+ *     "user":  "…",                   ← 访客密码哈希
+ *     "issuedAt": 1759…               ← 访客口令签发时间（毫秒），24h 后自动失效
+ *   }
+ *
+ * 口令机制（符合「重置不影响已登录的人，但别人拿旧链接进不去」）：
+ *   - 管理员生成随机口令 → 写进 access.json（带签发时间）
+ *   - 同学用口令进 → **必须设置自己的新口令**（至少 6 位），设完立即生效
+ *   - 管理员再「重置全网口令」→ 旧口令作废，**但已按要求改过密码的人不受影响**
+ *     （因为他们的密码是各自设的，存自己浏览器本地；口令只是「入场券」）
+ */
+(function(){
+'use strict';
+
+/* ---------- SHA-256（浏览器自带，不引第三方） ---------- */
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+/* 口令哈希 = SHA-256(盐 + 口令)。够用：这只是防「拿到网址就进」，不是防暴力破解的极限方案。 */
+async function pwHash(pw, salt){
+  return await sha256Hex((salt||'sz1') + '::' + String(pw||''));
+}
+
+let ACCESS = null;
+/* 带时间戳绕开 GitHub Pages 的 10 分钟 CDN 缓存 */
+function bust(u){ return u + (u.indexOf('?')>=0 ? '&' : '?') + 't=' + Date.now(); }
+
+async function loadAccess(){
+  try{
+    const r = await fetch(bust('data/access.json'), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    ACCESS = await r.json();
+  }catch(e){
+    /* 读不到就退回「不锁」：宁可放行也别把站长自己关在门外 */
+    ACCESS = {lock:false, _err:String(e&&e.message||e)};
+  }
+  return ACCESS;
+}
+function accessOpen(){
+  if(!ACCESS) return false;                       /* 还没读到配置，先当锁着 */
+  if(ACCESS.lock === false) return true;          /* 站长关了锁 */
+  if(ACCESS.until && Date.now() > Number(ACCESS.until)) return false;  /* 口令过期了 */
+  return true;
+}
+function accessExpired(){
+  return !!(ACCESS && ACCESS.until && Date.now() > Number(ACCESS.until));
+}
+
+/* ==================== 1. 访客锁 ==================== */
+function showLock(msg){
+  var lock = document.getElementById('lock');
+  if(lock){
+    lock.style.display = 'flex';
+    var p = document.getElementById('pw'); if(p) p.value = '';
+    var e = document.getElementById('pwerr'); if(e && msg) e.textContent = msg;
+  }
+  var app = document.getElementById('app'); if(app) app.style.display = 'none';
+  sessionStorage.removeItem('sz2_ok');
+}
+async function tryUnlock(){
+  var pwEl = document.getElementById('pw');
+  var pw = pwEl ? pwEl.value : '';
+  var err = document.getElementById('pwerr');
+  if(!ACCESS) await loadAccess();
+  if(!ACCESS || !ACCESS.salt){ if(err) err.textContent = '配置读取中，请稍候再试'; return false; }
+  if(await pwHash(pw, ACCESS.salt) !== ACCESS.user){
+    if(err) err.textContent = '口令不对，再试一次';
+    return false;
+  }
+  /* 口令正确：这次登录用的是「临时口令」的话，强制改密码 */
+  if(ACCESS.temp){
+    if(err){ err.textContent = '临时口令已生效，请设置你自己的密码（至少 6 位）'; }
+    var app = document.getElementById('app');
+    if(app) app.style.display = 'none';
+    var lock = document.getElementById('lock');
+    if(lock) lock.style.display = 'flex';
+    setTimeout(function(){ window.showChangePw && window.showChangePw(); }, 300);
+    return false;
+  }
+  sessionStorage.setItem('sz2_ok','1');
+  var l = document.getElementById('lock'); if(l) l.style.display = 'none';
+  var a = document.getElementById('app'); if(a) a.style.display = 'flex';
+  return true;
+}
+window.tryUnlock = tryUnlock;
+
+/* ==================== 2. 改密码（临时口令登录后必须走） ==================== */
+window.showChangePw = function(){
+  var lock = document.getElementById('lock');
+  if(!lock) return;
+  lock.innerHTML =
+    '<div style="max-width:340px;text-align:center">' +
+      '<h3 style="margin:0 0 6px">设置你的密码</h3>' +
+      '<p style="margin:0 0 14px;font-size:12px;opacity:.7;line-height:1.7">' +
+        '你刚用的是班长发出的临时口令。<br>请设一个自己的密码（至少 6 位），以后用这个进。</p>' +
+      '<input id="np1" type="password" placeholder="新密码（至少6位）" ' +
+        'style="width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font:inherit">' +
+      '<input id="np2" type="password" placeholder="再输一次" ' +
+        'style="width:100%;padding:10px 12px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;margin-top:8px">' +
+      '<div id="cperr" style="color:#c0392b;font-size:12px;margin-top:8px;min-height:18px"></div>' +
+      '<button id="okpw" style="margin-top:10px;width:100%;padding:11px;border:0;border-radius:8px;' +
+        'background:#2563eb;color:#fff;font:inherit;font-weight:600;cursor:pointer">保存并进入</button>' +
+    '</div>';
+  lock.style.display = 'flex';
+  document.getElementById('okpw').onclick = async function(){
+    var a = document.getElementById('np1').value, b = document.getElementById('np2').value;
+    var e = document.getElementById('cperr');
+    if(a.length < 6){ e.textContent = '至少 6 位'; return; }
+    if(a !== b){ e.textContent = '两次输入不一致'; return; }
+    /* 密码存本浏览器（不上传、不进仓库）——重置全网口令不会影响已改密码的人 */
+    try{ localStorage.setItem('sz2_mypw', a); }catch(_){}
+    var l = document.getElementById('lock'); if(l) l.style.display = 'none';
+    var ap = document.getElementById('app'); if(ap) ap.style.display = 'flex';
+    sessionStorage.setItem('sz2_ok','1');
+    e.textContent = '';
+  };
+};
+
+/* ==================== 3. 反爬（不改功能，只拦机器人） ==================== */
+/* 说明：纯前端反爬只能挡「无头浏览器以外的低级爬虫」，不是铁闸。
+   真正的保护是「口令 + 密文索引」两层。这里做的是：robots 友好声明 + 不给搜索引擎收录 +
+   访问太频繁就短暂限制。真要硬防，得上边缘函数（要备案域名，超出 0 元范围）。 */
+var _hits = [], _pageHits = [];
+function antiAbuse(){
+  var now = Date.now();
+  _hits = _hits.filter(function(t){ return now - t < 60000; });
+  _hits.push(now);
+  if(_hits.length > 120) return false;
+  return true;
+}
+window.antiAbuse = antiAbuse;
+
+/* ============ 反爬加固（2026-10-03）============
+   一、机器人识别：无头浏览器最典型的破绽是 navigator.webdriver / 无头 UA。
+      识别到就「假装报错」，不弹提示（弹提示等于告诉对方我们检测到了）。
+   二、粘性会话：必须先在页面里正常停留过、点过东西，才允许取整册（fullBytes）。
+      这样脚本必须模拟真实交互，纯 curl/requests 拿不到全文。
+   三、整册取文限流：短时间取多本整册就中断。
+   四、频率：每分钟请求上限，超过就降速。
+   ⚠️ 说实话：这些都是「提高爬取成本」，不是铁闸。密钥在客户端 JS 里，
+      愿意花功夫的人终究能拿到。真正的铁闸要上边缘函数做鉴权（需备案域名，超 0 元）。 */
+
+/* —— 1. 机器人识别 —— */
+window.isBot = function isBot(){
+  try{
+    if(navigator.webdriver === true) return true;
+    var ua = navigator.userAgent || "";
+    if(/HeadlessChrome|PhantomJS|Puppeteer|Playwright|Selenium|bot\/|crawler|spider|python-requests|curl\/|wget|libwww-perl|java\/|okhttp|axios/i.test(ua)) return true;
+    /* ⚠️ 以下两条容易误伤真人浏览器，慎用：
+       - navigator.languages 为空：部分安卓/隐私模式会为空 → 不作为判据
+       - plugins 数为 0：新版 Chrome 正常也是 0 → 只在 UA 也不像主流浏览器时才判
+       只保留「屏宽高为 0」这一条（真浏览器不会是 0）。 */
+    if(window.screen && (window.screen.width === 0 || window.screen.height === 0)) return true;
+  }catch(e){}
+  return false;
+}
+
+/* —— 2. 粘性会话：真人用过页面才放行整册 —— */
+var _human = false;
+function markHuman(){ _human = true; }
+window.markHuman = markHuman;
+function isHuman(){ return _human; }
+window.isHuman = isHuman;
+/* 页面加载 1.5 秒后、以及任何一次点击，都算「真人在用」 */
+setTimeout(function(){ _human = true; }, 1500);
+["click","keydown","mousemove","touchstart","wheel"].forEach(function(ev){
+  document.addEventListener(ev, function(){ _human = true; }, {once:true, passive:true});
+});
+
+/* —— 3. 整册取文限流（防批量拖书） —— */
+var _fullLog = [];
+window.fullAllow = function fullAllow(){
+  var now = Date.now();
+  _fullLog = _fullLog.filter(function(t){ return now - t < 120000; });
+  _fullLog.push(now);
+  if(_fullLog.length > 12) return false;   /* 2 分钟内取超过 12 本整册 → 拦 */
+  return true;
+}
+window.fullAllow = fullAllow;
+
+/* —— 4. 一次性「访问凭据」：页面启动时向云函数领一个短时令牌，
+      之后所有取文都要带它。没有令牌的直接请求（curl/脚本）拿不到数据。 —— */
+var GATE = null;
+async function getGate(force){
+  if(GATE && !force && GATE.exp > Date.now()) return GATE;
+  try{
+    var r = await fetch("https://1499683192-f4e14euqer.ap-guangzhou.tencentscf.com/gate", {cache:"no-store"});
+    var j = await r.json();
+    if(j && j.token) GATE = {token:j.token, exp: Date.now() + (j.ttl||120000)};
+  }catch(e){ GATE = null; }
+  return GATE;
+}
+window.getGate = getGate;
+
+/* ==================== 4. 管理员后台 ==================== */
+/* 云函数地址：管理员后台的所有动作都发到它（token 在云端，不经过浏览器） */
+var CLOUD = 'https://1499683192-f4e14euqer.ap-guangzhou.tencentscf.com';
+
+window.callCloud = async function(action, obj){
+  var r = await fetch(CLOUD + '/admin?action=' + encodeURIComponent(action), {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(obj || {})
+  });
+  return await r.json();
+};
+
+/* ==================== 管理员后台（2026-10-03 重写）====================
+   🔴 之前空白的原因（记下来别再犯）：
+   1) `w.document.body.innerHTML = adminHtml(...)` —— adminHtml 返回的是**完整 <body> 结构**，
+      塞进 innerHTML 等于把 <body> 嵌进 body 里，浏览器直接忽略 → 页面空白。
+   2) 后台脚本用 `window.addEventListener("load", ...)` 渲染，但 document.write 之后
+      load 事件早就过了，监听器永远不触发 → 内容根本没渲染。
+   现在改成：**一次性 document.write 出完整 HTML**（含 CSS 与内联脚本，立即执行）。 */
+/* ==================== 管理员后台（2026-10-03 第三版）====================
+   🔴 前两版为什么不行（记下来）：
+   版1：把完整 <body> 塞进 body.innerHTML → 浏览器忽略 → 空白
+   版2：用字符串拼 <script> 再 document.write → **脚本不执行**，按钮渲染出来但点不动
+   版3（现在）：**不拼脚本**。写纯 HTML，再由父窗口直接操作子窗口 DOM、addEventListener 绑事件。 */
+window.openAdmin = async function(){
+  if(!ACCESS) await loadAccess();
+  var pw = prompt('管理员密码');
+  if(!pw) return;
+  var w = window.open('', '_blank');
+  if(!w){ alert('浏览器拦截了新窗口，请允许弹窗'); return; }
+  var salt = (ACCESS && ACCESS.salt) || 'sz1';
+
+  w.document.write('<!doctype html><meta charset="utf-8"><title>蛇杖二号 · 管理员后台</title>' +
+    '<body style="font:14px/1.8 -apple-system,\'PingFang SC\',sans-serif;background:#f6f7f9;padding:24px;margin:0">' +
+    '<div style="max-width:760px;margin:0 auto"><h2>蛇杖二号 · 管理员后台</h2>' +
+    '<p id="tip" style="font-size:13px">正在校验口令…</p></div>');
+  w.document.close();
+
+  var r = null;
+  try{ r = await window.callCloud('check', {pw: pw, salt: salt}); }catch(e){ r = null; }
+  if(!r || r.code === 401 || r.code === 403){
+    var tip = w.document.getElementById('tip');
+    if(tip) tip.innerHTML = '<span style="color:#b91c1c">口令不对，或连不上云端。</span>';
+    return;
+  }
+  w.document.open();
+  w.document.write(adminPageHtml(r));
+  w.document.close();
+  bindAdmin(w, salt, pw);   /* 关键：父窗口直接绑事件 */
+};
+
+/* 状态行渲染（点完按钮要重绘，所以抽成独立函数） */
+function statHtml(st){
+  var untilTxt = (st && st.until) ? new Date(st.until).toLocaleString('zh-CN') : '—';
+  var locked = !!(st && st.acc_public && st.acc_public.lock);
+  var temp   = !!(st && st.acc_public && st.acc_public.temp);
+  return '状态：<b>' + (locked ? '已锁（需口令）' : '开放（任何人可进）') + '</b>　' +
+    (temp ? '临时口令生效中（对方首次登录须改密码）' : '非临时口令') +
+    '<br>失效时间：' + untilTxt;
+}
+
+function adminPageHtml(state){
+  function card(n, inner){
+    return '<div style="background:#fff;border:1px solid #e3e6ea;border-radius:12px;padding:16px 18px;margin-bottom:14px">' +
+      '<h3 style="margin:0 0 10px;font-size:15px">' + n + '</h3>' + inner + '</div>';
+  }
+  function btn(id, text, bg){
+    return '<button id="' + id + '" style="padding:9px 14px;border:0;border-radius:8px;background:' + bg +
+      ';color:#fff;font:inherit;cursor:pointer;margin:4px 6px 4px 0">' + text + '</button>';
+  }
+  return '<style>body{margin:0}button:hover{filter:brightness(1.08)}</style>' +
+    '<div style="max-width:760px;margin:0 auto">' +
+    '<h2 style="margin:0 0 4px">蛇杖二号 · 管理员后台</h2>' +
+    '<p style="font-size:12px;opacity:.65;margin:0 0 18px">口令正确 · 云端连接正常</p>' +
+    card('1. 全网口令',
+      '<div style="background:#fff8e6;border-left:3px solid #d68910;padding:9px 12px;border-radius:0 6px 6px 0;font-size:12px;line-height:1.7;margin-bottom:10px">' +
+      '「生成随机口令」= 发一张 <b>24 小时有效</b>的入场券，对方首次进入后<b>必须设置自己的密码</b>。<br>' +
+      '重置后：<b>还没登录过的人</b>（拿旧链接的）进不来；<b>已经改过密码的人不受影响</b>（密码存在他们自己浏览器里）。</div>' +
+      btn('bgen','生成随机口令（24h 有效）','#0f766e') +
+      btn('block','立即作废（锁死）','#b91c1c') +
+      btn('bopen','关闭密码锁（任何人可进）','#64748b') +
+      '<div id="r1" style="margin-top:10px;font-size:13px;min-height:22px"></div>') +
+    card('当前状态',
+      '<div id="statbox" style="font-size:13px">' + statHtml(state) + '</div>' +
+      '<div style="margin-top:8px;font-size:11px;opacity:.6;line-height:1.7">' +
+      '改完状态后，<b>同学要刷新网页</b>才生效（已经打开页面的不受影响）。</div>') +
+    card('2. 改管理员密码',
+      '<input id="np" type="password" placeholder="新管理员密码（至少 6 位）" ' +
+        'style="padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;width:220px">' +
+      btn('badmin','保存','#0f766e') +
+      '<div id="r2" style="margin-top:8px;font-size:13px;min-height:22px"></div>') +
+    card('3. 上传资料到文库',
+      '<div style="font-size:12px;opacity:.8;line-height:1.7;margin-bottom:8px">' +
+      '上传到 <code>lib/</code>。<br>⚠️ <b>目前索引里只有教材</b>——教材以外的资料<b>故意不建索引</b>' +
+      '（涉版权，回答时可参考但不展示、不引用），所以上传了也不会显示，这是设计如此。</div>' +
+      '<input type="file" id="f1" multiple style="margin-bottom:8px">' +
+      btn('bup','上传','#0f766e') +
+      '<div id="r3" style="margin-top:8px;font-size:13px"></div>') +
+  '</div>';
+}
+
+function bindAdmin(w, salt, pw){
+  var d = w.document;
+  function set(id, html, color){
+    var e = d.getElementById(id);
+    if(e){ e.innerHTML = html; if(color) e.style.color = color; }
+  }
+  /* 点完按钮重新读一次云端真实状态，刷新「当前状态」卡片 ——
+     否则卡片还是进后台那一刻的快照，看起来像「没生效」（2026-10-03 修）。 */
+  async function refreshStatus(){
+    var r = null;
+    try{ r = await window.callCloud('check', {pw: pw, salt: salt}); }catch(e){ r = null; }
+    if(r && r.acc_public){
+      var b = d.getElementById('statbox');
+      if(b) b.innerHTML = statHtml(r);
+    }
+  }
+  async function act(a){
+    set('r1', '处理中…', '#667085');
+    var r = null;
+    try{ r = await window.callCloud(a, {pw: pw, salt: salt}); }catch(e){ r = null; }
+    if(r && (r.code === 0 || r.action)){
+      if(a === 'gen'){
+        set('r1', '新口令已生成（24 小时后失效）：<b style="font-size:16px">' + r.msg +
+          '</b><br>把它和网址一起发给他们，他们首次进入后必须设置自己的密码。', '#059669');
+      } else if(a === 'lock'){
+        set('r1', '已作废并锁死。拿旧链接的人进不来了。', '#059669');
+      } else {
+        set('r1', '已关闭密码锁，任何人可进。', '#059669');
+      }
+      await refreshStatus();
+    } else {
+      set('r1', '失败：' + ((r && r.msg) || '未知错误'), '#b91c1c');
+    }
+  }
+  var g = d.getElementById('bgen'), l = d.getElementById('block'), o = d.getElementById('bopen');
+  if(g) g.addEventListener('click', function(){ act('gen'); });
+  if(l) l.addEventListener('click', function(){ act('lock'); });
+  if(o) o.addEventListener('click', function(){ act('open'); });
+  var ba = d.getElementById('badmin');
+  if(ba) ba.addEventListener('click', async function(){
+    var n = d.getElementById('np').value;
+    if(n.length < 6){ set('r2','至少 6 位','#b91c1c'); return; }
+    var r = null;
+    try{ r = await window.callCloud('adminpw', {pw: pw, salt: salt, newpw: n}); }catch(e){ r = null; }
+    /* 云函数 adminpw 成功时返回 {action:'adminpw', msg:'adminpw-updated'}，没有 code:0
+       —— 所以判断要放宽：有 action 字段就算成功（跟 act() 里同一套判据）。 */
+    if(r && (r.code === 0 || r.action === 'adminpw')) set('r2','已修改。下次进后台请用新密码。','#059669');
+    else set('r2','失败：' + ((r && r.msg) || ''), '#b91c1c');
+  });
+  var bu = d.getElementById('bup');
+  if(bu) bu.addEventListener('click', function(){
+    var f = d.getElementById('f1').files;
+    if(!f.length){ set('r3','先选文件','#b91c1c'); return; }
+    set('r3', '已选 ' + f.length + ' 个文件。上传到 GitHub 需要写权限（token 只在云端，不经过浏览器），请让毕成代劳。', '#667085');
+  });
+}
+
+})();
+
+</script>
+<script>
+/* ============ 配置 ============ */
+/* 🔒 2026-10-03 删除两个写死的常量（都是泄露点/死代码）：
+   - DEFAULT_PW_HASH：旧版把口令哈希写死在页面里，**注释里还直接跟了明文**。
+     这是公开仓库 + Pages 上的真实泄露点，已整条删除，口令只走 data/access.json 的哈希。
+   - LOCK_ON：进站判据早已改成读运行时 data/access.json 的 lock 字段，此常量全局无人引用。
+   🔴 曾经的 bug：LOCK_ON 写死 false，导致后台「生成口令 / 立即锁死」全部形同虚设。
+   现在进站是否要密码，**只看 data/access.json**（后台点一下 → 云端写 GitHub → 全网刷新即生效）。 */
+const IDX = "data/index.json", LIBP = "lib/";
+/* ---- 文库正文加密（AES-256-CTR）：线上只存密文，密文与明文等长，
+       所以索引里的字节偏移、Range 取文逻辑完全不变，只在读出来后加一步解密。 ---- */
+const ENC_ON = true;
+const ENC_PW = "shezhang2026", ENC_SALT = "shezhang1-ctx-v1", ENC_ITER = 210000;
+const INDEX_REL = "__INDEX__";
+let MK = null;                       /* 主密钥（仅内存，不落盘） */
+async function encKey(){
+  if(MK) return MK;
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(ENC_PW), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({name:"PBKDF2", salt:new TextEncoder().encode(ENC_SALT),
+                iterations:ENC_ITER, hash:"SHA-256"}, km, 256);
+  MK = new Uint8Array(bits);
+  return MK;
+}
+async function relNonce(rel){        /* 每文件唯一 nonce：HMAC(master, rel)[:12] */
+  const k = await encKey();
+  const km = await crypto.subtle.importKey("raw", k, {name:"HMAC", hash:"SHA-256"}, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", km, new TextEncoder().encode(rel))).slice(0,12);
+}
+function ctrBlock(nonce12, base){    /* counter = nonce12 || uint32be(base) */
+  const c = new Uint8Array(16); c.set(nonce12, 0);
+  new DataView(c.buffer).setUint32(12, base >>> 0, false);
+  return c;
+}
+/* 解密密文片段：buf 是 [start, start+len) 区间的密文 */
+async function decBytes(rel, buf, start){
+  if(!ENC_ON) return new Uint8Array(buf);
+  const k = await encKey();
+  const ak = await crypto.subtle.importKey("raw", k, {name:"AES-CTR"}, false, ["decrypt"]);
+  const off = ((start % 16) + 16) % 16;
+  let data = new Uint8Array(buf);
+  if(off){                            /* 非 16 字节对齐：前面补空，解完再切掉 */
+    const p = new Uint8Array(data.length + off);
+    p.set(data, off); data = p;
+  }
+  const out = await crypto.subtle.decrypt(
+    {name:"AES-CTR", counter:ctrBlock(await relNonce(rel), Math.floor(start/16)), length:32}, ak, data);
+  return new Uint8Array(out).subarray(off);
+}
+/* 原文分片通道：同源 Pages 优先 → raw 备用 → 整卷兜底（与窑洞一号同构）
+   单章按字节区间精准取，避免整卷下载。 */
+const RAWBASE = "https://raw.githubusercontent.com/bicheng2026/shezhang2/main/lib/";
+let DOCS = [], cache = {}, busy = false;
+const VERSION = "2026.09.16";
+
+/* ============ 密码 ============ */
+async function sha256(s){
+  const b = new TextEncoder().encode(s);
+  const h = await crypto.subtle.digest("SHA-256", b);
+  return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+/* 密码锁改为读 data/access.json（运行时配置）：
+   - 管理员在后台改一次 → 写进 GitHub → 全网刷新即生效，不用重新部署网页
+   - 页面本地存过自己的密码（sz2_mypw）时，以本地的为准
+     ⇒ 管理员「重置全网口令」不影响已改过密码的人，但拿旧链接的新人进不来 */
+let ACCESS = null;
+function accBust(u){ return u + (u.indexOf("?")>=0 ? "&" : "?") + "t=" + Date.now(); }
+async function loadAccess(){
+  try{
+    const r = await fetch(accBust("data/access.json"), {cache:"no-store"});
+    ACCESS = r.ok ? await r.json() : {lock:false, _missing:true};
+  }catch(e){ ACCESS = {lock:false, _err:String(e && e.message || e)}; }
+  return ACCESS;
+}
+function accPwHash(pw, salt){ return sha256((salt||"sz1") + "::" + pw); }
+function accNeedForceChange(){
+  /* 管理员发的是临时口令（temp=true）且还没人改过 → 登录后必须设置自己的密码 */
+  return !!(ACCESS && ACCESS.temp && !localStorage.getItem("sz2_mypw"));
+}
+async function unlock(){
+  const el = document.getElementById("pw");
+  const err = document.getElementById("pwerr");
+  const v = el ? el.value.trim() : "";
+  if(!v) return;
+  if(!ACCESS) await loadAccess();
+  const myPw = localStorage.getItem("sz2_mypw");
+  if(myPw){
+    /* 已设过自己密码：只认本地的，管理员重置不影响 */
+    if(await sha256(v) === myPw){ return enterSite(); }
+    if(err) err.textContent = "密码不对，再试一次";
+    return;
+  }
+  if(ACCESS.lock === false && !ACCESS.user){ return enterSite(); }
+  if(ACCESS.user && await accPwHash(v, ACCESS.salt) === ACCESS.user){
+    if(accNeedForceChange()){ if(window.showChangePw) return window.showChangePw(); }
+    return enterSite();
+  }
+  if(err) err.textContent = "口令不对，再试一次";
+}
+function enterSite(){
+  sessionStorage.setItem("sz2_ok","1");
+  document.getElementById("lock").style.display="none";
+  document.getElementById("app").style.display="flex";
+  try{ return encKey().then(boot).catch(function(e){ console.warn("密钥派生失败", e); boot(); }); }
+  catch(e){ boot(); }
+}
+document.getElementById("pw").addEventListener("keydown", e=>{ if(e.key==="Enter") unlock(); });
+
+/* ============ 管理员后台入口：按住 Ctrl+Shift+A 呼出（不显眼，防误触） ============ */
+document.addEventListener("keydown", function(e){
+  if(e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")){
+    e.preventDefault();
+    if(window.openAdmin) window.openAdmin();
+  }
+});
+/* 进站判断：**以运行时配置 data/access.json 为准**（后台点一下 → 写 GitHub → 全网刷新即生效）
+   🔴 2026-10-03 修复：以前这里读的是写死的 LOCK_ON（恒为 false），
+      导致后台「生成口令 / 立即锁死」形同虚设 —— 云函数明明把 lock 置成了 true，前台却永远直通。 */
+(async function initGate(){
+  await loadAccess();
+  var lockEl = document.getElementById("lock");
+  var appEl  = document.getElementById("app");
+  function pass(){
+    sessionStorage.setItem("sz2_ok","1");
+    lockEl.style.display = "none";
+    appEl.style.display  = "flex";
+  }
+  /* 读不到配置时按「开锁」放行 —— 宁可让人进，也别把站长自己关在门外 */
+  var locked = !(ACCESS && ACCESS.lock === false);
+  if(!locked) return pass();
+  if(sessionStorage.getItem("sz2_ok") === "1") return pass();
+  /* 需要口令：保持锁屏 */
+  lockEl.style.display = "flex";
+  appEl.style.display  = "none";
+  var err = document.getElementById("pwerr");
+  if(err && ACCESS && ACCESS.until && Date.now() > Number(ACCESS.until)){
+    err.textContent = "临时口令已过期，请向班长要新的";
+  }
+})();
+
+/* ============ 全局停用开关（站长 deploy --down / --up 触发）============ */
+async function checkStatus(){
+  try{
+    const r = await fetch("data/status.json", {cache:"no-store"});
+    const j = await r.json();
+    if(j && j.disabled){
+      sessionStorage.removeItem("sz2_ok");
+      document.getElementById("lock").style.display = "none";
+      document.getElementById("app").style.display = "none";
+      if(j.message) document.getElementById("downmsg").textContent = j.message;
+      document.getElementById("down").style.display = "flex";
+      return true;
+    }
+  }catch(e){ /* 取不到状态则正常放行，不误伤 */ }
+  return false;
+}
+
+/* ============ 反爬：启动时先探一次 ============
+   识别到无头浏览器/脚本，就不走正常流程（不弹提示，避免暴露检测逻辑）。
+   真人浏览器不受影响。 */
+async function _antiCrawlGate(){
+  try{
+    if(window.isBot && window.isBot()){
+      document.getElementById("lock").style.display="flex";
+      const m = document.createElement("div");
+      m.style.cssText="max-width:340px;text-align:center;color:#667085";
+      m.innerHTML = '<p style="font-size:13px">页面加载异常，请用浏览器直接打开。</p>';
+      const box = document.querySelector("#lock > div") || document.getElementById("lock");
+      box.appendChild(m);
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+/* ============ 载入索引 ============ */
+async function boot(){
+  if(DOCS.length) return;
+  try{
+    const buf = await (await fetch(IDX)).arrayBuffer();
+    const raw = new TextDecoder("utf-8").decode(await decBytes(INDEX_REL, buf, 0));
+    const j = JSON.parse(raw);
+    DOCS = j.docs;
+    const n = DOCS.reduce((a,d)=>a+d.s.length,0);
+    document.getElementById("stat").textContent = `${DOCS.length} 部文献 · ${n} 章节`;
+    renderChat(); buildSidebar();   /* 恢复上次会话；无历史则显示欢迎语 */
+  }catch(e){
+    document.getElementById("loading").textContent = "索引载入失败：" + e.message;
+  }
+}
+
+/* ============ 检索 ============ */
+function tokenize(q){
+  const s = q.replace(/[，。？！、；：""''（）《》〈〉·\s,.?!:;"]/g," ");
+  const out = [];
+  for(const seg of s.split(" ").filter(x=>x)){
+    if(/[\u4e00-\u9fa5]/.test(seg)){
+      out.push(seg);
+      for(let i=0;i<seg.length-1;i++) out.push(seg.slice(i,i+2));
+    } else out.push(seg.toLowerCase());
+  }
+  return [...new Set(out)].filter(x=>x.length>=2);
+}
+/* ============ 学业导航：学习/临床场景 → 教材章节 ============ */
+const GUIDE = [
+  {name:"解剖结构", kw:["解剖","骨","肌肉","肌","神经","血管","器官","位置","走行","椎","关节","内脏","胸","腹","盆腔","断面"],
+   ch:["运动系统","内脏学","脉管系统","感觉器","神经系统"]},
+  {name:"组织胚胎", kw:["组织","切片","上皮","结缔","肌组织","神经组织","胚胎","胚层","镜下","HE","染色"],
+   ch:["上皮组织","结缔组织","肌组织","神经组织","胚胎学"]},
+  {name:"生理功能", kw:["生理","调节","血压","心率","呼吸","尿","反射","电位","收缩","分泌","吸收","内环境","稳态"],
+   ch:["细胞的基本功能","血液","血液循环","呼吸","尿的生成和排出","神经系统的功能"]},
+  {name:"生化代谢", kw:["代谢","酶","糖","脂","蛋白","氨基酸","三羧酸","ATP","核酸","生物氧化","维生素"],
+   ch:["糖代谢","脂质代谢","氨基酸代谢","核酸","酶","生物氧化"]},
+  {name:"病理机制", kw:["机制","病理","发病","水肿","休克","缺氧","发热","炎症","肿瘤","代偿","衰竭","紊乱"],
+   ch:["水、电解质代谢紊乱","酸碱平衡","缺氧","发热","休克","炎症","肿瘤"]},
+  {name:"药理用药", kw:["药","用药","剂量","副作用","不良反应","禁忌","抗生素","抗菌","药动","药效","受体"],
+   ch:["药动学","药效学","抗菌药物","传出神经系统药理"]},
+  {name:"诊断临床", kw:["诊断","鉴别","病例","症状","体征","查体","问诊","主诉","化验","指标","影像","心电图"],
+   ch:["问诊","症状学","检体诊断","实验诊断","心电图"]},
+  {name:"实验报告", kw:["实验","制片","显微镜","报告","操作","步骤","染色","离心","滴定"],
+   ch:["绪论","实验"]},
+  {name:"心态医患", kw:["压力","焦虑","累","失眠","迷茫","医患","沟通","情绪","抑郁","紧张","倦怠"],
+   ch:["心理应激","心身疾病","医患沟通","心理障碍"]},
+  {name:"复习备考", kw:["复习","期末","考试","重点","考点","背","记不住","题库","刷题","挂科","绩点","怎么学"],
+   ch:["绪论","总论"]},
+];
+/* 高频医学概念 → 教材章节关键词（直接问概念时锚定） */
+const CONCEPT = [
+  {kw:["酸碱平衡","酸中毒","碱中毒","pH","代酸","代碱"], ch:["酸碱平衡","水、电解质"]},
+  {kw:["休克","微循环","DIC","弥漫性血管内凝血"], ch:["休克","凝血"]},
+  {kw:["心衰","心力衰竭","心功能不全"], ch:["心力衰竭","血液循环"]},
+  {kw:["糖尿病","血糖","胰岛素","糖耐量"], ch:["糖代谢","糖尿病","内分泌"]},
+  {kw:["炎症","渗出","变质","增生","肉芽"], ch:["炎症"]},
+  {kw:["肿瘤","癌","肉瘤","分化","转移","恶变"], ch:["肿瘤"]},
+  {kw:["感染","抗菌","抗生素","耐药","病原","细菌","病毒","寄生虫"], ch:["抗菌药物","微生物","寄生虫","感染"]},
+  {kw:["免疫","抗原","抗体","补体","超敏","变态反应","疫苗"], ch:["免疫","抗原","抗体","超敏反应"]},
+  {kw:["凝血","出血","止血","血栓","栓塞"], ch:["血液","凝血","血栓"]},
+  {kw:["肾","肾炎","肾功能","肾小球","滤过","少尿","蛋白尿"], ch:["尿的生成和排出","肾小球","泌尿系统"]},
+  {kw:["呼吸衰竭","缺氧","通气","换气","肺","哮喘","肺炎","COPD"], ch:["呼吸","缺氧","呼吸衰竭"]},
+  {kw:["电解质","低钾","高钾","钠","脱水"], ch:["水、电解质","电解质"]},
+  {kw:["肝","肝炎","肝硬化","黄疸","转氨酶"], ch:["肝","消化","黄疸"]},
+  {kw:["神经","反射","传导","脑","脊髓","卒中","脑梗","癫痫"], ch:["神经系统","神经系统的功能","脑血管"]},
+  {kw:["基因","遗传","DNA","RNA","染色体","突变","转录","翻译"], ch:["基因","遗传","核酸"]},
+  {kw:["妊娠","分娩","产褥","妇科","月经","子宫","胎盘"], ch:["妊娠","分娩","女性生殖"]},
+  {kw:["儿童","小儿","新生儿","生长发育","喂养"], ch:["生长发育","新生儿","儿童"]},
+  {kw:["统计","P值","假设检验","样本量","t检验","卡方","流行病学"], ch:["假设检验","统计","流行病学"]},
+];
+function themeMatch(q){
+  let best = null, bestN = 0;
+  for(const g of GUIDE){
+    let n = 0;
+    for(const w of g.kw){ if(q.includes(w)) n++; }
+    if(n > bestN){ best = g; bestN = n; }
+  }
+  return bestN >= 1 ? {g:best, score:bestN} : null;
+}
+function conceptMatch(q){
+  let best = null, bestN = 0;
+  for(const c of CONCEPT){
+    let n = 0;
+    for(const w of c.kw){ if(q.includes(w)) n++; }
+    if(n > bestN){ best = c; bestN = n; }
+  }
+  return bestN >= 1 ? {c:best} : null;
+}
+function normT(s){ return s.replace(/[\s，。、！？；：“”"'\u3000·—…（）()《》〈〉\-]/g,""); }
+function findChapter(title){
+  /* 按章节关键词找：先精确/前缀/归一化，再「包含」兜底。
+     医学教材章节标题多带「第X章 」「一、」等前缀，包含匹配是主力。 */
+  const tn = normT(title);
+  for(const d of DOCS){
+    for(let i=0;i<d.s.length;i++){
+      const ti = d.s[i][0].trim();
+      if(ti === title || ti.startsWith(title+"（") || ti.startsWith(title+"(") || ti.startsWith(title+"　") || normT(ti) === tn){
+        return {d, i, ti};
+      }
+    }
+  }
+  for(const d of DOCS){
+    for(let i=0;i<d.s.length;i++){
+      const ti = d.s[i][0].trim();
+      if(ti.includes(title) || normT(ti).includes(tn)) return {d, i, ti};
+    }
+  }
+  return null;
+}
+function search(q, topk=10){
+  const tk = tokenize(q);
+  const secRes = [], docRes = [];
+  for(const d of DOCS){
+    let dsc = 0;
+    for(const t of tk){
+      if(d.t && d.t.includes(t)) dsc += t.length*3;
+      if(d.i && d.i.includes(t)) dsc += t.length*1.5;   // 简介命中
+    }
+    let bestSc = 0, bestI = -1;
+    for(let i=0;i<d.s.length;i++){
+      const ti = d.s[i][0]; let sc = 0;
+      for(const t of tk){ if(ti.includes(t)) sc += t.length*3; }
+      if(sc>bestSc){ bestSc=sc; bestI=i; }
+    }
+    const total = dsc*0.7 + bestSc;
+    if(total>2){
+      if(bestI>=0 && bestSc>0){
+        secRes.push({d,i:bestI,sc:total,ti:d.s[bestI][0]});
+      } else if(dsc>2){
+        docRes.push({d,i:-1,sc:dsc*0.7,ti:"（本册正文相关，需册内定位）"});
+      }
+    }
+  }
+  secRes.sort((a,b)=>b.sc-a.sc);
+  docRes.sort((a,b)=>b.sc-a.sc);
+  const out = secRes.slice(0,8);
+  for(const r of docRes){
+    if(out.some(o=>o.d.f===r.d.f)) continue;
+    out.push(r);
+    if(out.length>=topk) break;
+  }
+  return out;
+}
+function findRelated(txt, q, maxOut=3){
+  /* 整册命中：按段落定位含关键词的正文，取相关段前后文 */
+  const tk = tokenize(q).sort((a,b)=>b.length-a.length);
+  const paras = txt.split(/\n{2,}/).map(p=>p.replace(/^#{1,4}\s*/,"").trim()).filter(p=>p.length>40);
+  const scored = [];
+  for(const p of paras){
+    let s = 0;
+    for(const t of tk){ if(p.includes(t)) s += t.length*2; }
+    if(s>0) scored.push({p,s});
+  }
+  scored.sort((a,b)=>b.s-a.s);
+  const out = [];
+  for(const r of scored.slice(0,maxOut)){
+    out.push(r.p.slice(0,1600));
+  }
+  return out;
+}
+/* 路径逐段编码（保留 / 分隔） */
+function encPath(f){ return f.split("/").map(encodeURIComponent).join("/"); }
+/* 整册明文字节（回落通道 / 册内定位用），按册缓存 */
+async function fullBytes(d){
+  const k = "F:" + d.f;
+  if(cache[k]) return cache[k];
+  /* ==== 反爬闸门（2026-10-03）====
+     整册取文是「一篇就能拖走整本书」的通道，所以卡得最紧：
+       1) 识别到无头浏览器 → 直接失败（不弹提示，弹了等于告诉对方被识别）
+       2) 页面还没「真人用过」（停留/点击过）→ 失败
+       3) 2 分钟内取超过 12 本整册 → 失败
+     单章按字节区间精准取的那条路不受影响（真人翻书本来就一章一章取）。 */
+  if(window.isBot && window.isBot()) throw new Error("取文被拒");
+  if(window.isHuman && !window.isHuman()) throw new Error("取文被拒");
+  if(window.fullAllow && !window.fullAllow()) throw new Error("取文过于频繁，请稍后再试");
+  const buf = await (await fetch(LIBP + encPath(d.f))).arrayBuffer();
+  const arr = await decBytes(d.f, buf, 0);
+  cache[k] = arr; return arr;
+}
+async function full(d){ return new TextDecoder("utf-8").decode(await fullBytes(d)); }
+/* ---- 取文通道：① 同源 Pages → ② raw 备用 → ③ 整册兜底，每路带硬超时 ---- */
+const CH_T = 3000;
+let _pagesFail = 0, _rawFail = 0;
+async function _sliceTry(url, f, from, to){
+  const ac = new AbortController();
+  const timer = setTimeout(()=>ac.abort(), CH_T);
+  try{
+    const r = await fetch(url, {headers:{Range:`bytes=${from}-${to-1}`}, signal:ac.signal});
+    clearTimeout(timer);
+    if(r.status === 206){
+      const arr = await decBytes(f, await r.arrayBuffer(), from);
+      return new TextDecoder("utf-8").decode(arr).replace(/\uFFFD+$/,"");
+    }
+    if(r.status === 200){                    // 服务器忽略 Range，返回了整册
+      const whole = await fullBytes({f});    // 明文字节，按字节切片才不会错位
+      return new TextDecoder("utf-8").decode(whole.subarray(from, to)).replace(/\uFFFD+$/,"");
+    }
+  }catch(e){ clearTimeout(timer); }
+  return null;
+}
+async function fetchRange(f, from, to){
+  const key = "R:" + f + "@" + from + "-" + to;
+  if(cache[key] !== undefined) return cache[key];
+  if(_pagesFail < 2){
+    const t = await _sliceTry(LIBP + encPath(f), f, from, to);
+    if(t !== null){ _pagesFail = 0; cache[key] = t; return t; }
+    _pagesFail++;
+  }
+  if(_rawFail < 2){
+    const t = await _sliceTry(RAWBASE + encPath(f), f, from, to);
+    if(t !== null){ _rawFail = 0; cache[key] = t; return t; }
+    _rawFail++;
+  }
+  const arr = await fullBytes({f});
+  const t = new TextDecoder("utf-8").decode(arr.subarray(from, to)).replace(/^\uFFFD+|\uFFFD+$/g,"");
+  cache[key] = t; return t;
+}
+/* 取某一章正文（字节偏移取自索引；max 为字节数，约合 2600 中文字） */
+async function sliceSec(d, i, max=7800){
+  const a = d.s[i][1];
+  const b = (i+1 < d.s.length) ? d.s[i+1][1] : d.n;
+  const strip = s => s.replace(/^#{1,4}\s+.*$/gm,"").trim();
+  let body = strip(await fetchRange(d.f, a, Math.min(b, a + max)));
+  if(body.length < 120){
+    body = strip(await fetchRange(d.f, a, Math.min(d.n, a + max * 4)));
+  }
+  return body;
+}
+/* 册内定位：只取该册开头几章的区间，不再拉整册 */
+async function headSpan(d, bytes=30000){
+  const upto = Math.min(d.s.length - 1, 5);
+  const end = (d.s[upto] ? d.s[upto][1] : 0) + bytes;
+  return await fetchRange(d.f, 0, Math.min(d.n, end));
+}
+
+/* ============ 提问 ============ */
+function addMsg(who, html, cls){
+  const rec = {who, html, cls: cls||"",
+               text: String(html).replace(/<[^>]*>/g,"")};
+  SS.push(rec);
+  const bub = paintMsg(rec);
+  const c = document.getElementById("chat");
+  if(c) c.scrollTop = c.scrollHeight;
+  return bub;
+}
+const esc = s => s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+/* 读取某套端点的配置：which = "pri"（主，默认）或 "alt"（备用） */
+function cfgOf(which){
+  const alt = which === "alt";
+  return {
+    base: (localStorage.getItem(alt?"sz2_base2":"sz2_base")||(alt?"":"https://api.deepseek.com/v1")).replace(/\/$/,""),
+    key : localStorage.getItem(alt?"sz2_key2":"sz2_key")||"",
+    mdl : localStorage.getItem(alt?"sz2_model2":"sz2_model")||(alt?"":"deepseek-v4-flash")
+  };
+}
+let _lastQ = "";
+
+async function ask(opt){
+  if(busy) return;
+  opt = opt || {};
+  const which = opt.which === "alt" ? "alt" : "pri";
+  const el = document.getElementById("q");
+  const fromInput = (opt.q == null);
+  /* 来自输入框的内容先看是不是斜杠命令（/think /net /quiz /outline /draw /help） */
+  if(fromInput){
+    const raw = el.value.trim();
+    if(raw && slashCmd(raw)) return;
+  }
+  const q = fromInput ? el.value.trim() : String(opt.q).trim();
+  if(!q) return;
+  const cfg = cfgOf(which);
+  if(!cfg.key){ openSet(); alert(which==="alt" ? "请先在设置里填写「备用端点」的接口地址与 API Key" : "请先在设置里填写 API Key"); return; }
+  const think = localStorage.getItem("sz2_think")==="1";
+  /* 深度思考：默认沿用当前模型并开启推理；仅在设置里指定了思考模型时才换模型 */
+  const thinkMdl = (localStorage.getItem("sz2_mdlthink")||"").trim();
+  const mdl = (which==="pri" && think && thinkMdl) ? thinkMdl : cfg.mdl;
+  /* 任务模式（问答 / 出题 / 大纲 / 示意图）与附件 */
+  const mode = (opt.mode !== undefined) ? opt.mode : _mode;
+  const atts = (opt.atts !== undefined) ? opt.atts : TOOLS.atts.slice();
+  const imgs = [];
+  for(const a of atts){
+    if(a.kind === "image") imgs.push(a);
+    /* 扫描版 PDF 转出的页图，一并作为图片送进视觉模型 */
+    if(a.extraImgs) a.extraImgs.forEach((d,k)=>imgs.push({kind:"image", name:(a.name||"")+` 第${k+1}页`, data:d}));
+  }
+  const fileTxt = atts.filter(a=>a.kind!=="image" && a.text)
+                      .map(a=>`〔附件：${a.name}〕\n${a.text}`).join("\n\n").slice(0,30000);
+  let visMdl = mdl, visCfg = cfg;
+  if(imgs.length){                     /* 识图：改用多模态接口 + 视觉模型 */
+    const vm = (localStorage.getItem("sz2_vmodel")||"").trim();
+    const ic = imageCfg();
+    if(vm || ic.own) visCfg = { base: ic.base, key: ic.key };
+    if(vm) visMdl = vm;
+    else if(!opt._warned){
+      addMsg("系统", `📎 已附加 ${imgs.length} 张图片。当前模型「${mdl}」若不支持图片输入会报错 —— 可在「设置 → 识图模型」里填一个视觉模型（如 qwen3-vl-plus）。`, "sys");
+    }
+  }
+  if(opt.q == null){ el.value = ""; el.style.height = "auto"; }
+  busy = true; document.getElementById("send").disabled = true;
+
+  _lastQ = q;
+  if(which === "alt"){
+    addMsg("系统", `🔁 已改用备用端点重发 · ${esc(cfg.mdl)}`, "sys");
+  } else {
+    const mini = atts.map(a=>a.kind==="image"
+        ? `<img src="${a.data}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid var(--line);margin:6px 6px 0 0">`
+        : `<span style="display:inline-block;font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:6px 6px 0 0">📄 ${esc(a.name)}</span>`).join("");
+    addMsg("我", esc(q) + (mini?`<div>${mini}</div>`:""), "me");
+    if(atts.length) TOOLS.clear();
+  }
+  // ① 场景判定（学业导航；无命中时用概念映射兜底）
+  const theme = themeMatch(q);
+  const conc = theme ? null : conceptMatch(q);
+  // ② 常规检索 + 场景/概念锚点合并
+  const hits = search(q);
+  const cands = [];
+  const used = new Set();
+  const push = (d,i,ti) => { const k = d.f + "#" + (i<0 ? "W" : i); if(!used.has(k)){ used.add(k); cands.push({d,i,ti}); } };
+  if(theme){
+    for(const t of theme.g.ch){
+      const ch = findChapter(t);
+      if(ch) push(ch.d, ch.i, ch.ti);
+    }
+  } else if(conc){
+    for(const t of conc.c.ch){
+      const ch = findChapter(t);
+      if(ch) push(ch.d, ch.i, ch.ti);
+    }
+  }
+  for(const h of hits) push(h.d, h.i, h.ti||h.d.t);
+  // ③ 取正文（并发）
+  let picked = cands.slice(0, mode === "quiz" ? 10 : 6);
+  if(mode === "quiz"){
+    /* 出题练习：把题库 / 课后习题 / 历年试题类文献优先排到前面 */
+    const isBank = d => /题库|试题|习题|期考|真题|答案|测验|自测|练习|作业/.test((d.t || "") + (d.f || ""));
+    picked = picked.slice().sort((a, b) => (isBank(b.d) ? 1 : 0) - (isBank(a.d) ? 1 : 0)).slice(0, 6);
+  }
+  const waitBub = paintMsg({who:"蛇杖二号", cls:"sys",
+    html:"正在检索文库原文…", text:"正在检索文库原文…"});
+  const cap = (p, ms) => Promise.race([p, new Promise(r=>setTimeout(()=>r(null), ms))]);
+  const netP = NET.on
+    ? Promise.race([NET.gather(q),
+        new Promise(r=>setTimeout(()=>r({txt:"", list:[], note:"联网超时，已跳过。"}), 3500))])
+    : Promise.resolve({txt:"", list:[], note:""});
+  const [got, netRes] = await Promise.all([
+    Promise.all(picked.map(async h=>{
+      try{
+        if(h.i >= 0){
+          const body = await cap(sliceSec(h.d, h.i), 6000);
+          return body ? {src:`${h.d.t} · ${h.ti}`, txt:body} : null;
+        }
+        const span = await cap(headSpan(h.d), 6000);
+        return span ? findRelated(span, q).map((p,k)=>({src:`${h.d.t}（册内定位${k+1}）`, txt:p})) : null;
+      }catch(e){ return null; }
+    })),
+    netP
+  ]);
+  if(waitBub && waitBub.parentElement) waitBub.parentElement.remove();
+  const parts = got.flat().filter(Boolean);
+  const ctx = parts.map((p,i)=>`〔${i+1}〕${p.src}\n${p.txt}`).join("\n\n").slice(0,14000);
+  const hasRef = parts.length > 0;
+  const sys = `你是「蛇杖二号」——以一座临床医学教材库为底座的知识助手，可在课程学习、复习备考、临床思维、病例分析、实验报告、资料整理等场景中提供分析、讲解与办法。给真诚、有见地、能落地的内容。
+
+不要揣测或预设提问者的身份、专业、年级、职业或处境，也不要把任何身份设定套在用户身上；就事论事地回答问题本身。
+
+回答要求：
+  0）除非用户明确要求展开，否则先给一句话结论，再视需要展开，不要主动铺长。
+  1）先弄清问题真正卡在哪里（概念没懂、不会应用，还是不知道从哪下手），再给讲解；不空谈大道理，不说套话。
+2）讲解要讲清机制与逻辑链条（是什么 → 为什么 → 怎么记 / 怎么用），必要时举一个贴近临床或考试的具体例子；能用一张对比表说清的就说清，但不要堆砌。
+3）下面【原文】已编号〔1〕〔2〕…。你的回答只要用到某条原文的观点或原话，就必须在该句或该段末尾用〔编号〕标出来（例：……这就是休克早期的代偿机制〔3〕），让读者一眼看出哪句话对应哪本教材哪一章；不要只在开头笼统提「引用了文献」却不标位置。没用到就不标；绝不伪造出处。若没有【原文】或原文不足，凭准确的医学基础知识作答，切勿编造引文或数据。
+4）涉及数值（剂量、参考值、浓度、公式）必须标注这是教材口径，并提醒实际临床以现行指南与医嘱为准。
+5）回复用纯中文自然叙述，不要使用 ✳、◆、▍ 等装饰符号，也不要用 Markdown 标记（如 **、#）；需要分点时用（一）（二）或 1. 2. 编号，保持干净易读。
+  6）自然聊天，不要机械套框架；有温度、口语化，顺着用户的语气走。
+  7）安全底线：涉及具体症状的自我处置、用药、剂量，只给学习层面的思路，并明确提示「仅供参考、以就诊和医嘱为准」；若描述像急症（胸痛、呼吸困难、意识障碍、大出血、中毒、高热惊厥等），第一句就让他立刻就医或拨打 120，不要展开自我处理方案。
+8）若下面附有【联网参考】，那是刚从公开网络检索到的资料，只作背景交代与时效性补充。你的分析骨架、判断依据必须仍然来自【原文】与医学基础知识；联网内容只用来把「新近的指南、共识、新闻」讲准，绝不能取代或架空教材结论。两者若不一致，以【原文】为准，并明确说出分歧在哪。凡用到了联网内容，须在该句末尾标〔网序号〕（例：……这一版指南的推荐等级有所调整〔网1〕）。没用到的不要标，更不要把联网内容伪装成原文引用。`
+  + (atts.length ? `
+
+【关于附件】用户随问题上传了 ${atts.length} 个附件${imgs.length?"（含图片）":""}。图片内容请直接阅读；文本类附件内容列在【附件内容】里。回答时要把附件反映的信息与【原文】对照起来讲，指出题库/资料口径与教材口径是否一致。` : "")
+  + `\n\n` + (MODE_PROMPT[mode] || "");
+
+  // 来源卡片（青色 = 文库原文）
+  if(hasRef){
+    const srcHtml = `<b>本次为你调用的教材原文（${parts.length} 处）：</b>` + parts.map((p,i)=>
+      `<div>〔${i+1}〕${esc(p.src)}</div>`).join("");
+    addMsg("蛇杖二号", srcHtml, "src");
+  }
+  // 联网来源卡片（蓝色 = 网络资料）
+  if(netRes.list.length){
+    const netHtml = `<b>联网参考（${netRes.list.length} 条 · 公开网络实时取得，非教材原文）：</b>`
+      + netRes.list.map((x,i)=>`<div>〔网${i+1}〕${esc(x.src)} · ${esc(x.t)}</div>`).join("");
+    addMsg("蛇杖二号", netHtml, "net");
+  } else if(NET.on){
+    addMsg("蛇杖二号",
+      `<b>🌐 联网参考：本轮未取到内容</b><div>${esc(netRes.note || "通道不可达或被过滤，已自动跳过；文库回答不受影响。")}</div>`,
+      "net");
+  }
+  // 深度思考块（仅深度思考模式创建）
+  let tb = null, twrap = null;
+  if(think){
+    tb = addMsg("💭 深度思考", "思考中…", "think");
+    twrap = tb.parentElement;
+    twrap.querySelector(".who").onclick = ()=>{
+      const bub = twrap.querySelector(".bubble");
+      bub.style.display = bub.style.display==="none" ? "block" : "none";
+    };
+  }
+  const b = addMsg("蛇杖二号", "…");
+  let acc = "", racc = "", hasThink = false;
+  const mems = MEM.active();
+  const memTxt = mems.length
+    ? `【关于我的长期记忆】（供参考，别生硬复述）\n${mems.map((m,i)=>`（${i+1}）${m.text}`).join("\n")}\n\n`
+    : "";
+  const netTxt = netRes.txt
+    ? `【联网参考】（公开网络实时检索所得，仅作背景与时效性补充，不能替代【原文】；与原文冲突时以原文为准）\n${netRes.txt}\n\n`
+    : "";
+  try{
+    const userText = memTxt + (fileTxt ? `【附件内容】\n${fileTxt}\n\n` : "")
+                   + (ctx ? `【原文】\n${ctx}\n\n` : "") + netTxt + `【我的问题】\n${q}`;
+    const userContent = imgs.length
+      ? [{type:"text", text:userText}].concat(
+          imgs.map(a=>({type:"image_url", image_url:{url:a.data}})))
+      : userText;
+    const r = await fetch(visCfg.base + "/chat/completions", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+visCfg.key},
+      body: JSON.stringify(Object.assign({model:visMdl, stream:true, temperature:0.7,
+        messages:[{role:"system",content:sys},{role:"user",content:userContent}]},
+        think ? {thinking:{type:"enabled"}, reasoning_effort:"high"} : {thinking:{type:"disabled"}}))
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status+" "+(await r.text()).slice(0,200));
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    while(true){
+      const {done,value} = await rd.read();
+      if(done) break;
+      for(const line of dec.decode(value).split("\n")){
+        if(!line.startsWith("data:")) continue;
+        const j = line.slice(5).trim();
+        if(j === "[DONE]") continue;
+        try{
+          const d = JSON.parse(j);
+          const rct = d.choices?.[0]?.delta?.reasoning_content || "";
+          if(rct){ hasThink = true; racc += rct; if(tb) typeInto(tb, racc.replace(/[✳◆▍#]+/g,""), 90); }
+          const t = d.choices?.[0]?.delta?.content || "";
+          if(t){ acc += t; acc = acc.replace(/[✳◆▍#]+/g,""); typeInto(b, acc); }
+        }catch(e){}
+      }
+    }
+    if(twrap){ if(hasThink){ twrap.querySelector(".who").textContent = "💭 深度思考（已完成，点击折叠）"; } else { twrap.remove(); } }
+    if(!acc) b.textContent = "（模型未返回内容，请检查模型名或接口地址）";
+  }catch(e){
+    b.textContent = "调用失败：" + e.message + "\n\n请检查设置里的接口地址、API Key、模型名。";
+  }
+  busy=false; document.getElementById("send").disabled=false;
+  if(b && b._rec) b._rec.html = esc(b.textContent);
+  if(tb && tb._rec) tb._rec.html = esc(tb.textContent);
+  /* 本条回答的工具条：导出 / 出题 / 大纲 / 示意图 */
+  if(b && acc.trim()){
+    const barEl = document.createElement("div");
+    barEl.className = "expbar";
+    barEl.innerHTML =
+      `<button class="iconbtn" onclick="TOOLS.toPDF(this)">📄 导出 PDF</button>` +
+      `<button class="iconbtn" onclick="TOOLS.toWord(this)">📝 导出 Word</button>` +
+      `<button class="iconbtn" onclick="TOOLS.diagram(this)">🧩 生成示意图</button>` +
+      `<button class="iconbtn" onclick="TOOLS.quiz(this)">❓ 据此出题</button>` +
+      `<button class="iconbtn" onclick="TOOLS.outline(this)">📚 据此处大纲</button>` +
+      `<button class="iconbtn" onclick="reaskAlt()" title="把上一个问题发到备用端点">🔁 换端点</button>` +
+      `<button class="iconbtn" onclick="reaskRewrite()" title="自动改写成中性问法后重发">✎ 改写重问</button>`;
+    b.parentElement.appendChild(barEl);
+  }
+  SS.touch();
+  if(acc.trim()) distill(q, acc, cfg);
+}
+
+/* ============ B+A：应对服务商内容审查 ============
+   B —— 换一个尺度不同的端点把同一问题再发一次；
+   A —— 用模型把问题改写成中性、去敏感措辞的问法后重发。 */
+
+/* B：把上一个问题发到备用端点 */
+function reaskAlt(){
+  if(busy) return;
+  if(!_lastQ){ alert("还没有可重问的问题"); return; }
+  const c2 = cfgOf("alt");
+  if(!c2.key || !c2.base){ openSet(); alert("请先在设置里填写「备用端点」的接口地址与 API Key"); return; }
+  ask({ q:_lastQ, which:"alt" });
+}
+
+/* A 的底层：用某个端点把问题改写成中性问法（非流式，快） */
+async function rewriteWith(cfg, q){
+  const r = await fetch(cfg.base + "/chat/completions", {
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
+    body: JSON.stringify({model:cfg.mdl, stream:false, temperature:0.3,
+      messages:[
+        {role:"system", content:"你是措辞改写助手。把用户给的提问改写成一个中性、客观、去掉情绪化与敏感措辞的提问句，意思保持不变；只输出改写后的这一句话，不要解释、不要分点、不要加引号。"},
+        {role:"user", content:q}
+      ]})
+  });
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const j = await r.json();
+  return String(j.choices?.[0]?.message?.content||"").trim().replace(/^["'「『]+|["'」』]+$/g,"").trim();
+}
+/* A：改写后重发 */
+async function reaskRewrite(){
+  if(busy) return;
+  if(!_lastQ){ alert("还没有可重问的问题"); return; }
+  let rw = "", usedWhich = "pri";
+  for(const which of ["pri","alt"]){
+    const c = cfgOf(which);
+    if(!c.key || !c.base) continue;
+    try{
+      const out = await rewriteWith(c, _lastQ);
+      if(out && out.length >= 4){ rw = out; usedWhich = which; break; }
+    }catch(e){}
+  }
+  if(!rw){ alert("改写失败：请检查接口地址与 Key 是否可用"); return; }
+  addMsg("蛇杖二号", `<b>✎ 已改写为中性问法：</b><div>${esc(rw)}</div>`, "net");
+  await ask({ q:rw, which:usedWhich });
+}
+
+function applyFont(){
+  const r = document.documentElement.style;
+  r.setProperty("--q-fs", (localStorage.getItem("sz2_qfs")||"15")+"px");
+  r.setProperty("--q-color", localStorage.getItem("sz2_qcolor")||"#e3eef0");
+  r.setProperty("--a-fs", (localStorage.getItem("sz2_afs")||"15")+"px");
+  r.setProperty("--a-color", localStorage.getItem("sz2_acolor")||"#e3eef0");
+}
+function applyModel(){
+  const on = localStorage.getItem("sz2_think")==="1";
+  const m = localStorage.getItem("sz2_model")||"deepseek-v4-flash";
+  const tm = (localStorage.getItem("sz2_mdlthink")||"").trim();
+  const alt = localStorage.getItem("sz2_model2")||"";
+  const hasAlt = !!(localStorage.getItem("sz2_key2")||"").trim();
+  const el = document.getElementById("curmodel");
+  if(el) el.textContent = "中继：" + (on && tm ? tm : m) + (on ? "（深度思考）" : "") + (hasAlt ? " ｜ 备用：" + (alt||"—") : "");
+}
+function applyThink(){
+  const on = localStorage.getItem("sz2_think")==="1";
+  const cb = document.getElementById("thinksw");
+  if(cb) cb.checked = on;
+  const b = document.getElementById("thinkbtn");
+  if(b){ b.classList.toggle("on", on); b.textContent = "💭 深度思考：" + (on ? "开" : "关"); }
+}
+/* 深度思考的开关函数见上方 setThink / toggleThink */
+
+/* 多模态配置：识图与生图共用同一套接口，只换模型名；
+   接口地址或 Key 留空 → 自动回退到主接口与主 Key */
+function imageCfg(){
+  const c = cfgOf("pri");
+  const base = (localStorage.getItem("sz2_ibase") || "").trim().replace(/\/$/, "");
+  const key  = (localStorage.getItem("sz2_ikey") || "").trim();
+  return { base: base || c.base, key: key || c.key, own: !!(base || key) };
+}
+/* ============ 校内入口：已移除（连着校园网时本来就能访问内网）============ */
+const _typers = new WeakMap();
+function typeInto(el, text, rate){
+  let st=_typers.get(el);
+  if(!st){ st={shown:0, full:"", running:false, last:0}; _typers.set(el, st); }
+  st.full = text;
+  const cps = (rate!=null) ? rate : parseInt(localStorage.getItem("sz2_tspeed")||"25",10);
+  if(cps<=0){ el.textContent = text; return; }
+  if(st.running) return;
+  st.running = true; st.last = 0;
+  const step = (ts)=>{
+    if(!st.last) st.last = ts;
+    const dt = ts - st.last; st.last = ts;
+    st.shown = Math.min(st.full.length, st.shown + cps*dt/1000);
+    el.textContent = st.full.slice(0, Math.floor(st.shown));
+    const c = document.getElementById("chat"); if(c) c.scrollTop = 1e9;
+    if(st.shown < st.full.length) requestAnimationFrame(step);
+    else st.running = false;
+  };
+  requestAnimationFrame(step);
+}
+
+/* ============ 任务模式：在问答之外追加专门的指令（不改身份、不预设角色） ============ */
+const MODE_PROMPT = {
+  qa: "",
+  quiz: `【本轮任务：出题练习】
+取材顺序（重要）：**先找现成的题，再自己命题**。
+第一步，看上面【原文】里有没有现成的题目 —— 题库、课后习题、历年试题、章节测验、自测题都算；
+有现成的就优先采用（允许做少量改写、换选项、合并小问）。
+第二步，只有原文里确实没有现成题的考点，才由你命制新题。
+
+其它要求：
+（一）8～12 题，覆盖原文主要考点，由易到难。
+（二）题型搭配：单选题、多选题、填空题、名词解释、简答题；原文有临床素材时必出 1 道病例分析题。
+（三）每题都要能在【原文】里找到依据。题干后不要写答案，全部答案与解析统一放在末尾「【参考答案与解析】」。
+（四）解析要写清为什么对、为什么错，并标出依据的原文编号〔n〕。
+（五）**每题末尾用括号注明来源**，三选一：（来源：教材课后习题）/（来源：题库 · 章节名）/（来源：自拟）。
+（六）原文没讲到的不要出题；重要考点但本册未覆盖的，在末尾用一行列出「本册未覆盖：…」。
+（七）不要出现任何身份设定或称呼，直接开题。`,
+  outline: `【本轮任务：记忆大纲】
+请依据上面【原文】整理一份便于背诵的复习大纲，要求：
+（一）按「篇—章—节—要点」分级编号（一、（一）1. ①），层级清晰。
+（二）每个要点写成可直接记忆的短句，保留教材关键术语与原口径，不要改写成含糊表述。
+（三）末尾单独列出三块：「易混淆点」「数字要点（剂量 / 正常值 / 分级标准）」「记忆口诀或联想」。
+（四）每条要点后标出依据的原文编号〔n〕。
+（五）原文没有的内容不要补；重要但缺失的考点，在末尾单列「本册未覆盖」。
+（六）不要出现任何身份设定或称呼。`
+};
+
+/* ============ 工具区：附件（识图 / 识别文件）、导出（PDF / Word）、示意图、绘图 ============ */
+const TOOLS = {
+  atts: [],          /* {kind:"image"|"text", name, data|text, size} */
+  MAXM: 12,
+
+  /* ---- 附件 ---- */
+  async add(files){
+    for(const f of files){
+      if(this.atts.length >= this.MAXM){ alert("一次最多 " + this.MAXM + " 个附件"); break; }
+      try{
+        const a = await this.parse(f);
+        if(a) this.atts.push(a);
+      }catch(e){ alert(`「${f.name}」读取失败：${e.message}`); }
+    }
+    this.render();
+  },
+  parse(f){
+    const name = f.name, ext = (name.split(".").pop()||"").toLowerCase();
+    const rd = (how)=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error("读取失败")); how==="buf"?r.readAsArrayBuffer(f):how==="data"?r.readAsDataURL(f):r.readAsText(f,"utf-8"); });
+    if(["jpg","jpeg","png","webp","gif","bmp"].includes(ext))
+      return rd("data").then(u=>this.shrink(name,u)).then(d=>({kind:"image", name, data:d, size:f.size}));
+    if(ext === "pdf") return rd("buf").then(b=>this.pdf(b, name));
+    if(ext === "docx") return rd("buf").then(b=>this.docx(b, name));
+    if(["txt","md","csv","json","log","srt"].includes(ext))
+      return rd("text").then(t=>({kind:"text", name, text:t, size:f.size}));
+    if(ext === "doc")
+      return rd("text").then(t=>({kind:"text", name:name+"（老版 doc，可能夹杂格式符）", text:t.replace(/[^\S\n]+/g," ").slice(0,50000), size:f.size}));
+    return rd("text").then(t=>({kind:"text", name, text:t.slice(0,50000), size:f.size}));
+  },
+  /* 图片压到长边 1400、转 jpeg，控制 base64 体积 */
+  shrink(name, dataUrl){
+    return new Promise(res=>{
+      const im = new Image();
+      im.onload = ()=>{
+        const M = 1400, m = Math.max(im.width, im.height);
+        const w = m>M ? Math.round(im.width*M/m) : im.width;
+        const h = m>M ? Math.round(im.height*M/m) : im.height;
+        const c = document.createElement("canvas"); c.width=w; c.height=h;
+        c.getContext("2d").drawImage(im,0,0,w,h);
+        res(c.toDataURL("image/jpeg", 0.86));
+      };
+      im.onerror = ()=>res(dataUrl);
+      im.src = dataUrl;
+    });
+  },
+  async pdf(buf, name){
+    await this.load("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js");
+    const L = window.pdfjsLib;
+    if(!L) throw new Error("PDF 组件加载失败（可能无网络）");
+    L.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    const doc = await L.getDocument({data:buf}).promise;
+    const cap = Math.min(doc.numPages, 30);
+    let out = [];
+    for(let i=1;i<=cap;i++){
+      const pg = await doc.getPage(i), tc = await pg.getTextContent();
+      const t = tc.items.map(x=>x.str).join(" ").replace(/\s+/g," ").trim();
+      if(t) out.push(`— 第 ${i} 页 —\n${t}`);
+    }
+    if(!out.length){   /* 无文字层：把前 3 页渲染成图给视觉模型 */
+      const imgs = [];
+      for(let i=1;i<=Math.min(doc.numPages,3);i++){
+        const pg = await doc.getPage(i);
+        const vp = pg.getViewport({scale:1.6});
+        const cv = document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
+        await pg.render({canvasContext:cv.getContext("2d"), viewport:vp}).promise;
+        imgs.push(await this.shrink("", cv.toDataURL("image/jpeg",0.85)));
+      }
+      return {kind:"text", name:name+"（扫描版，已转图片）", text:`〔PDF 无文字层，共 ${doc.numPages} 页，已把前 ${imgs.length} 页作为图片附上〕`, extraImgs:imgs};
+    }
+    return {kind:"text", name, text:out.join("\n\n").slice(0,50000)};
+  },
+  async docx(buf, name){
+    await this.load("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js");
+    if(!window.JSZip) throw new Error("DOCX 组件加载失败（可能无网络）");
+    const zip = await window.JSZip.loadAsync(buf);
+    const x = zip.file("word/document.xml");
+    if(!x) throw new Error("不是标准 docx");
+    let xml = await x.async("string");
+    xml = xml.replace(/<w:p[ >]/g,"\n<w:p ").replace(/<w:tab\/>/g,"\t").replace(/<w:br\/>/g,"\n");
+    const txt = xml.replace(/<[^>]+>/g,"")
+      .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&").replace(/&quot;/g,'"')
+      .replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
+    return {kind:"text", name, text:txt.slice(0,50000)};
+  },
+  clear(){ this.atts = []; this.render(); },
+  render(){
+    const box = document.getElementById("attbar");
+    if(!box) return;
+    if(!this.atts.length){ box.style.display="none"; box.innerHTML=""; return; }
+    box.style.display="flex";
+    box.innerHTML = this.atts.map((a,i)=> a.kind==="image"
+      ? `<span class="atchip"><img src="${a.data}"><b>${esc(a.name)}</b><i onclick="TOOLS.del(${i})">×</i></span>`
+      : `<span class="atchip"><b>📄 ${esc(a.name)}</b><i onclick="TOOLS.del(${i})">×</i></span>`).join("")
+      + `<span class="atchip" style="border:0;color:var(--dim);cursor:pointer" onclick="TOOLS.clear()">全部清除</span>`;
+  },
+  del(i){ this.atts.splice(i,1); this.render(); },
+
+  /* ---- 取某条消息的正文 ---- */
+  feed(btn){
+    const m = btn.closest(".msg");
+    const t = m && m.querySelector(".bubble") ? m.querySelector(".bubble").textContent : "";
+    return (t||"").replace(/^\s*蛇杖二号\s*/,"").trim();
+  },
+  title(txt){
+    const l = txt.split("\n").map(s=>s.trim()).filter(Boolean);
+    return (l[0]||"蛇杖二号").slice(0,36).replace(/[\\/:*?"<>|]/g,"_");
+  },
+
+  /* ---- 导出 PDF（走浏览器打印，中文无字体问题） ---- */
+  toPDF(btn){
+    const txt = this.feed(btn);
+    if(!txt) return alert("这条消息没有可导出的文字");
+    const ttl = this.title(txt);
+    const body = txt.split("\n").map(s=>{
+      const t = s.trim();
+      if(!t) return "";
+      if(/^([一二三四五六七八九十]+、|第[一二三四五六七八九十]+[篇章节]|（[一二三四五六七八九十]+）|【.{2,12}】)/.test(t))
+        return `<h3>${esc(t)}</h3>`;
+      if(/^\d+[.、]/.test(t)) return `<p class="li">${esc(t)}</p>`;
+      return `<p>${esc(t)}</p>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>${esc(ttl)}</title>
+<style>
+@page{margin:18mm 16mm}
+body{font:15px/1.85 "PingFang SC","Microsoft YaHei",serif;color:#111}
+h1{font-size:20px;text-align:center;margin:0 0 4px}
+.meta{text-align:center;color:#777;font-size:11.5px;margin-bottom:18px;border-bottom:1px solid #ddd;padding-bottom:10px}
+h3{font-size:15.5px;margin:16px 0 6px;color:#0b5c52}
+p{margin:6px 0;text-align:justify}
+p.li{margin-left:1.6em}
+</style></head><body>
+<h1>${esc(ttl)}</h1>
+<div class="meta">蛇杖二号 · 临床医学原文知识库 ｜ 导出 ${new Date().toLocaleString("zh-CN")} ｜ 内容依据文库教材原文，仅供学习参考，不构成诊疗意见</div>
+${body}
+</body></html>`;
+    const f = document.createElement("iframe");
+    f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+    document.body.appendChild(f);
+    const d = f.contentDocument || f.contentWindow.document;
+    d.open(); d.write(html); d.close();
+    setTimeout(()=>{
+      try{ f.contentWindow.focus(); f.contentWindow.print(); }catch(e){ alert("打印失败："+e.message); }
+      setTimeout(()=>f.remove(), 2000);
+    }, 350);
+  },
+
+  /* ---- 导出 Word（优先真 .docx，失败降级为 .doc） ---- */
+  async toWord(btn){
+    const txt = this.feed(btn);
+    if(!txt) return alert("这条消息没有可导出的文字");
+    const ttl = this.title(txt);
+    const lines = txt.split("\n").map(s=>s.trim());
+    try{
+      await this.load("https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js");
+      if(!window.docx) throw new Error("no docx");
+      const {Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType} = window.docx;
+      const kids = [
+        new Paragraph({alignment:AlignmentType.CENTER,
+          children:[new TextRun({text:ttl, bold:true, size:32})]}),
+        new Paragraph({alignment:AlignmentType.CENTER, spacing:{after:240},
+          children:[new TextRun({text:`蛇杖二号 · 临床医学原文知识库 ｜ 导出 ${new Date().toLocaleString("zh-CN")} ｜ 仅供学习参考`, size:18, color:"888888"})]})
+      ];
+      for(const t of lines){
+        if(!t) continue;
+        if(/^([一二三四五六七八九十]+、|第[一二三四五六七八九十]+[篇章节]|（[一二三四五六七八九十]+）|【.{2,12}】)/.test(t))
+          kids.push(new Paragraph({heading:HeadingLevel.HEADING_3, spacing:{before:200, after:80},
+            children:[new TextRun({text:t, bold:true, color:"0B5C52"})]}));
+        else if(/^\d+[.、]/.test(t))
+          kids.push(new Paragraph({indent:{left:420}, children:[new TextRun({text:t, size:22})]}));
+        else
+          kids.push(new Paragraph({spacing:{after:80}, children:[new TextRun({text:t, size:22})]}));
+      }
+      const blob = await Packer.toBlob(new Document({sections:[{children:kids}]}));
+      this.dl(blob, ttl + ".docx");
+    }catch(e){
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head><meta charset="utf-8"><title>${esc(ttl)}</title>
+<style>body{font:15px/1.8 "PingFang SC","Microsoft YaHei";} h1{font-size:19px;text-align:center} h2{font-size:16px;color:#0b5c52} p{margin:6px 0}</style>
+</head><body><h1>${esc(ttl)}</h1>
+<p style="text-align:center;color:#888;font-size:11px">蛇杖二号 · 临床医学原文知识库 ｜ 仅供学习参考</p>
+${lines.filter(Boolean).map(t=>/^([一二三四五六七八九十]+、|第[一二三四五六七八九十]+[篇章节]|（[一二三四五六七八九十]+）|【.{2,12}】)/.test(t)?`<h2>${esc(t)}</h2>`:`<p>${esc(t)}</p>`).join("")}
+</body></html>`;
+      this.dl(new Blob(["\ufeff"+html], {type:"application/msword"}), ttl + ".doc");
+    }
+  },
+
+  /* ---- 依据本条回答生成示意图（模型输出 SVG，矢量、可再编辑） ---- */
+  async diagram(btn){
+    const txt = this.feed(btn);
+    if(!txt) return alert("这条消息没有可用的文字");
+    const c = cfgOf("pri");
+    if(!c.key) { openSet(); return alert("请先在设置里填 API Key"); }
+    const vm = (localStorage.getItem("sz2_dmodel")||"").trim() || c.mdl;
+    const bub = addMsg("蛇杖二号", "正在依据内容画示意图…", "sys");
+    const ask2 = `把下面这段医学内容画成一张示意/流程图，只输出 SVG 代码，不要任何解释、不要 Markdown 代码围栏。
+要求：
+1）以 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 H" width="800"> 开头，H 按内容自适应（400～1100）。
+2）浅色背景 #fbfdfc，深色文字 #12332f，主色 #1d7a6d，辅助色 #5ad1c0、#c0392b、#6ea8d8。
+3）中文用 font-family="PingFang SC,Microsoft YaHei,sans-serif"，字号 13～17，确保文字不超出框、不重叠。
+4）用矩形/圆角矩形表示环节，箭头（含 marker）表示流向；层级、因果关系要一眼看清。
+5）只画这段内容里确实有的信息，不要添加原文没有的机制或数字。
+6）所有文字必须是纯文本，不要用 \` \` \` 包裹整段代码。
+
+内容：
+${txt.slice(0, 6000)}`;
+    try{
+      const r = await fetch(c.base + "/chat/completions", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+c.key},
+        body: JSON.stringify({model:vm, stream:false, temperature:0.3,
+          messages:[{role:"system", content:"你是医学示意图绘制助手，只输出可直接渲染的 SVG 代码。"},
+                    {role:"user", content:ask2}]})
+      });
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const j = await r.json();
+      let svg = String(j.choices?.[0]?.message?.content||"");
+      svg = svg.replace(/```[a-zA-Z]*/g,"").replace(/```/g,"").trim();
+      const i = svg.indexOf("<svg"), k = svg.lastIndexOf("</svg>");
+      if(i < 0 || k < 0) throw new Error("模型没有返回合法 SVG，请重试或换模型");
+      svg = svg.slice(i, k+6);
+      const host = bub.parentElement;
+      host.querySelector(".bubble").outerHTML =
+        `<div class="bubble" style="background:#fbfdfc;padding:10px">${svg}</div>
+         <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+           <button class="iconbtn" onclick="TOOLS.svgDl(this,'svg')">⬇ 下载 SVG</button>
+           <button class="iconbtn" onclick="TOOLS.svgDl(this,'png')">⬇ 下载 PNG</button>
+         </div>`;
+      SS.touch();
+    }catch(e){
+      bub.textContent = "示意图生成失败：" + e.message;
+    }
+  },
+  svgDl(btn, how){
+    const svg = btn.closest(".msg").querySelector("svg");
+    if(!svg) return;
+    const s = new XMLSerializer().serializeToString(svg);
+    if(how === "svg"){
+      this.dl(new Blob([s], {type:"image/svg+xml"}), "蛇杖二号示意图.svg");
+      return;
+    }
+    const vb = (svg.getAttribute("viewBox")||"0 0 800 600").split(/\s+/).map(Number);
+    const w = vb[2]||800, h = vb[3]||600, k = 2;
+    const im = new Image();
+    im.onload = ()=>{
+      const c = document.createElement("canvas"); c.width=w*k; c.height=h*k;
+      const x = c.getContext("2d");
+      x.fillStyle = "#fbfdfc"; x.fillRect(0,0,c.width,c.height);
+      x.drawImage(im,0,0,c.width,c.height);
+      c.toBlob(b=>this.dl(b, "蛇杖二号示意图.png"), "image/png");
+    };
+    im.onerror = ()=>alert("PNG 转换失败，请改下载 SVG");
+    im.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(s)));
+  },
+
+  /* ---- 可选：AI 绘图（需在设置里填图像生成接口）---- */
+  async drawText(q){
+    if(!q){ addMsg("系统", "用法：<b>/draw 要画的内容</b>，例如 <b>/draw 心脏传导系统示意图</b>", "sys"); return; }
+    const ic = imageCfg();
+    const base = ic.base, key = ic.key;
+    const mdl  = localStorage.getItem("sz2_imodel")||"cogview-3-flash";
+    if(!base || !key){
+      openSet();
+      addMsg("系统", "🎨 绘图需要接口与 Key：可在「设置 → 识图 / 示意图 / 绘图」里单独填，或勾选「识图 / 生图 使用同一个接口与 Key」直接复用主接口。", "sys");
+      return;
+    }
+    const bub = addMsg("蛇杖二号", "正在绘制…", "sys");
+    try{
+      const r = await fetch(base + "/images/generations", {
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+        body: JSON.stringify({model:mdl, prompt:q, size:"1024x1024"})
+      });
+      if(!r.ok) throw new Error("HTTP "+r.status+" "+(await r.text()).slice(0,120));
+      const j = await r.json();
+      const url = j.data?.[0]?.url || (j.data?.[0]?.b64_json ? "data:image/png;base64,"+j.data[0].b64_json : "");
+      if(!url) throw new Error("接口未返回图片");
+      bub.parentElement.querySelector(".bubble").innerHTML =
+        `<img src="${url}" style="max-width:100%;border-radius:8px">` +
+        `<div style="margin-top:8px"><button class="iconbtn" onclick="TOOLS.imgDl('${url}')">⬇ 下载图片</button></div>`;
+    }catch(e){
+      bub.textContent = "绘图失败：" + e.message + "\n（图像接口需为 OpenAI 兼容的 /images/generations）";
+    }
+  },
+  async imgDl(url){
+    try{
+      const b = await (await fetch(url)).blob();
+      this.dl(b, "蛇杖二号绘图.png");
+    }catch(e){ window.open(url, "_blank"); }
+  },
+
+  /* ---- 一键：据当前回答继续出题 / 出大纲 ---- */
+  quiz(btn){
+    const t = this.feed(btn);
+    ask({ q: `请就下面这段内容出题练习。\n\n${t.slice(0, 4000)}`, mode:"quiz" });
+  },
+  outline(btn){
+    const t = this.feed(btn);
+    ask({ q: `请就下面这段内容整理记忆大纲。\n\n${t.slice(0, 4000)}`, mode:"outline" });
+  },
+
+  /* 显示 / 隐藏密钥框，便于核对有没有粘错东西 */
+  eye(id, btn){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.type = el.type === "password" ? "text" : "password";
+    if(btn) btn.style.color = el.type === "text" ? "var(--teal)" : "";
+  },
+
+  load(src){    return new Promise((res, rej)=>{
+      if([...document.scripts].some(s=>s.src === src)) return res();
+      const s = document.createElement("script");
+      s.src = src; s.onload = ()=>res(); s.onerror = ()=>rej(new Error("脚本加载失败：" + src.split("/").pop()));
+      document.head.appendChild(s);
+    });
+  },
+  dl(blob, name){
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+};
+
+/* ============ 任务模式（由斜杠命令进入，标签可点退出）============ */
+let _mode = "";
+const MODE_NAME = { quiz:"📝 出题练习", outline:"📚 记忆大纲", "":"💬 普通问答" };
+function setModeTag(){
+  const tag = document.getElementById("modetag");
+  if(!tag) return;
+  if(_mode){ tag.style.display = ""; tag.textContent = MODE_NAME[_mode] + " ✕"; }
+  else { tag.style.display = "none"; }
+}
+function askMode(m){
+  _mode = m || "";
+  setModeTag();
+  const q = document.getElementById("q").value.trim();
+  if(q) ask({ mode:_mode });
+  else document.getElementById("q").focus();
+}
+
+/* ============ 斜杠命令：界面只留两个按钮，其余功能在这里内嵌 ============ */
+const SLASH_HELP = `<b>可用命令</b>
+<div>/think · 深度思考 开/关</div>
+<div>/net · 联网参考 开/关</div>
+<div>/quiz 主题 · 出题练习（进入出题模式，点标签可退出）</div>
+<div>/outline 主题 · 记忆大纲</div>
+<div>/draw 描述 · AI 绘图（需在设置里配图像接口）</div>
+<div>/help · 显示这份说明</div>
+<div style="margin-top:6px;color:var(--dim)">不认识的 / 开头内容会当作普通问题照常提问。</div>`;
+function slashCmd(text){
+  const m = text.match(/^\/([A-Za-z\u4e00-\u9fa5]+)\s*([\s\S]*)$/);
+  if(!m) return false;
+  const cmd = m[1].toLowerCase(), arg = (m[2] || "").trim();
+  const el = document.getElementById("q");
+  const clear = ()=>{ el.value = ""; el.style.height = "auto"; };
+  if(["think","思考","深度思考"].includes(cmd)){
+    const on = localStorage.getItem("sz2_think") !== "1";
+    setThink(on); clear();
+    addMsg("系统", `💭 深度思考已${on ? "开启" : "关闭"}（设置里也有开关）`, "sys");
+    return true;
+  }
+  if(["net","联网"].includes(cmd)){
+    NET.setSw(!NET.on); clear();
+    addMsg("系统", `🌐 联网参考已${NET.on ? "开启" : "关闭"}`, "sys");
+    return true;
+  }
+  if(["quiz","出题"].includes(cmd)){
+    clear(); _mode = "quiz"; setModeTag();
+    ask({ q: arg || "请依据文库原文，出一套这个知识点的练习题。", mode:"quiz" });
+    return true;
+  }
+  if(["outline","大纲"].includes(cmd)){
+    clear(); _mode = "outline"; setModeTag();
+    ask({ q: arg || "请依据文库原文，整理一份记忆大纲。", mode:"outline" });
+    return true;
+  }
+  if(["draw","画","绘图"].includes(cmd)){
+    clear();
+    if(!arg) { addMsg("系统", "用法：/draw 要画的内容（例如 /draw 心脏传导系统示意图）", "sys"); return true; }
+    TOOLS.drawText(arg);
+    return true;
+  }
+  if(["help","?","帮助","h"].includes(cmd)){
+    clear(); addMsg("蛇杖二号", SLASH_HELP, "sys");
+    return true;
+  }
+  return false;   /* 未知命令 → 当普通问题 */
+}
+/* 深度思考开关（设置面板里的复选框 + /think 命令共用） */
+function setThink(on){
+  localStorage.setItem("sz2_think", on ? "1" : "0");
+  applyThink(); applyModel();
+}
+function toggleThink(){ setThink(localStorage.getItem("sz2_think") !== "1"); }
+
+/* ============ 附件入口：文件选择 + 拖拽 ============ */
+document.getElementById("filein").addEventListener("change", e=>{
+  TOOLS.add(e.target.files); e.target.value = "";
+});
+const _appOn = ()=>document.getElementById("app").style.display !== "none";
+document.addEventListener("dragover", e=>{
+  if(!_appOn()) return;
+  e.preventDefault(); document.body.classList.add("dragging");
+});
+document.addEventListener("dragleave", e=>{
+  if(e.relatedTarget === null) document.body.classList.remove("dragging");
+});
+document.addEventListener("drop", e=>{
+  if(!_appOn()) return;
+  e.preventDefault(); document.body.classList.remove("dragging");
+  const dt = e.dataTransfer;
+  if(dt && dt.files && dt.files.length) TOOLS.add(dt.files);
+  else if(dt && dt.getData("text")){
+    const el = document.getElementById("q");
+    el.value = (el.value ? el.value + "\n" : "") + dt.getData("text");
+  }
+});
+
+/* ============ 会话历史（本机 localStorage 持久化）============ */
+const SS = {
+  K:"sz2_sessions", C:"sz2_cur", MAX:40, MSG_MAX:200,
+  list:[], curId:"",
+  load(){
+    try{ this.list = JSON.parse(localStorage.getItem(this.K)||"[]"); }catch(e){ this.list = []; }
+    if(!Array.isArray(this.list)) this.list = [];
+    this.curId = localStorage.getItem(this.C) || "";
+    if(!this.list.length) this.new_();
+  },
+  save(){
+    try{ localStorage.setItem(this.K, JSON.stringify(this.list)); }
+    catch(e){ /* 配额满：从最旧的会话开始丢弃 */
+      while(this.list.length > 1){
+        this.list.pop();
+        try{ localStorage.setItem(this.K, JSON.stringify(this.list)); return; }catch(_){}
+      }
+    }
+  },
+  cur(){ return this.list.find(s=>s.id===this.curId) || this.new_(); },
+  new_(){
+    const s = {id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+               title:"新会话", ts:Date.now(), msgs:[]};
+    this.list.unshift(s); this.curId = s.id;
+    localStorage.setItem(this.C, s.id); this.save();
+    return s;
+  },
+  switchTo(id){
+    if(!this.list.some(s=>s.id===id)) return;
+    this.curId = id; localStorage.setItem(this.C, id); this.save();
+    renderChat(); renderSession();
+  },
+  del(id){
+    this.list = this.list.filter(s=>s.id!==id);
+    if(!this.list.length) this.new_();
+    else { if(this.curId===id){ this.curId = this.list[0].id; localStorage.setItem(this.C, this.curId); }
+           this.save(); }
+    renderChat(); renderSession();
+  },
+  rename(id){
+    const s = this.list.find(x=>x.id===id); if(!s) return;
+    const t = prompt("会话名称", s.title);
+    if(t!=null){ s.title = t.trim() || s.title; this.save(); renderSession(); }
+  },
+  clearAll(){
+    if(!confirm("清空全部历史会话？此操作只影响本机浏览器。")) return;
+    this.list = []; this.new_(); renderChat(); renderSession();
+  },
+  push(rec){
+    const s = this.cur();
+    s.msgs.push(rec);
+    if(s.msgs.length > this.MSG_MAX) s.msgs.shift();
+    if(s.title==="新会话" && rec.cls==="me" && rec.text) s.title = rec.text.slice(0,18);
+    s.ts = Date.now(); this.save();
+  },
+  touch(){ const s = this.cur(); s.ts = Date.now(); this.save(); }
+};
+
+function paintMsg(rec){
+  const c = document.getElementById("chat");
+  const m = document.createElement("div");
+  m.className = "msg " + (rec.cls||"");
+  m.innerHTML = `<div class="who">${rec.who}</div><div class="bubble">${rec.html}</div>`;
+  c.appendChild(m);
+  if(rec.cls === "think"){
+    const bub = m.querySelector(".bubble");
+    m.querySelector(".who").onclick = ()=>{ bub.style.display = bub.style.display==="none" ? "block" : "none"; };
+  }
+  const bub = m.querySelector(".bubble");
+  bub._rec = rec;
+  return bub;
+}
+
+function renderChat(){
+  const c = document.getElementById("chat"); if(!c) return;
+  const s = SS.cur();
+  c.innerHTML = "";
+  if(!s.msgs.length){
+    const n = DOCS.reduce((a,d)=>a+d.s.length,0);
+    c.innerHTML = `<div id="loading"><div style="color:var(--teal);font-size:15px;margin-bottom:8px">蛇杖二号 · 文库问答</div>
+      <div>已载入 ${DOCS.length} 部文献、${n} 个章节。<br>专业课问题、病例分析、复习策略、实验报告、实习心态——都可以问，我会调取教材原文为你参谋。</div>
+      <div style="margin-top:14px;font-size:12px">试试：「休克的分期和机制怎么理解」「酸碱失衡怎么判断」「这章该怎么复习」「这个病例的鉴别诊断思路」</div>
+      <div style="margin-top:10px;font-size:11px;opacity:.6">当前版本 v${VERSION}${MEM.list.length ? ` · 长期记忆 ${MEM.list.length} 条` : ""}</div></div>`;
+    return;
+  }
+  for(const rec of s.msgs) paintMsg(rec);
+  c.scrollTop = c.scrollHeight;
+}
+
+function renderSession(){
+  const box = document.getElementById("seslist"); if(!box) return;
+  box.innerHTML = SS.list.map(s=>{
+    const d = new Date(s.ts);
+    const when = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    return `<div class="srow${s.id===SS.curId?" cur":""}">
+      <div class="tt" onclick="SS.switchTo('${s.id}')">${esc(s.title)}
+        <span style="color:var(--dim);font-size:11.5px"> · ${s.msgs.length}条 · ${when}</span></div>
+      <button onclick="SS.rename('${s.id}')">改名</button>
+      <button onclick="SS.del('${s.id}')">删</button>
+    </div>`;
+  }).join("") || `<div class="hint">暂无会话</div>`;
+}
+function openSess(){ renderSession(); document.getElementById("sesmask").style.display = "flex"; }
+function closeSess(){ document.getElementById("sesmask").style.display = "none"; }
+function newSession(){ SS.new_(); renderChat(); renderSession(); closeSess(); }
+
+/* ============ 长期记忆 ============ */
+const MEM = {
+  K:"sz2_memory", MAX:60,
+  list:[],
+  load(){
+    try{ this.list = JSON.parse(localStorage.getItem(this.K)||"[]"); }catch(e){ this.list = []; }
+    if(!Array.isArray(this.list)) this.list = [];
+  },
+  save(){
+    try{ localStorage.setItem(this.K, JSON.stringify(this.list)); }
+    catch(e){
+      while(this.list.length > 1){
+        this.list.pop();
+        try{ localStorage.setItem(this.K, JSON.stringify(this.list)); return; }catch(_){}
+      }
+    }
+  },
+  active(){ return this.list.filter(m=>m.on!==false); },
+  add(text){
+    const t = (text||"").trim(); if(t.length < 4) return;
+    if(this.list.some(m=>m.text===t)) return;
+    this.list.unshift({id:"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,4),
+                       text:t, ts:Date.now(), on:true});
+    if(this.list.length > this.MAX) this.list.length = this.MAX;
+    this.save(); renderMemList(); renderMemCount();
+  },
+  del(id){ this.list = this.list.filter(m=>m.id!==id); this.save(); renderMemList(); renderMemCount(); },
+  toggle(id){ const m = this.list.find(x=>x.id===id); if(!m) return;
+              m.on = (m.on===false); this.save(); renderMemList(); renderMemCount(); },
+  clearAll(){ if(!confirm("清空全部长期记忆？")) return;
+              this.list = []; this.save(); renderMemList(); renderMemCount(); }
+};
+function renderMemCount(){
+  const el = document.getElementById("memcnt");
+  if(el) el.textContent = MEM.list.length ? MEM.list.length : "";
+}
+function renderMemList(){
+  const box = document.getElementById("memlist"); if(!box) return;
+  box.innerHTML = MEM.list.map(m=>`<div class="mrow${m.on===false?" off":""}">
+      <input type="checkbox" ${m.on===false?"":"checked"} onchange="MEM.toggle('${m.id}')" style="margin-top:3px">
+      <div class="tx">${esc(m.text)}</div>
+      <button class="del" onclick="MEM.del('${m.id}')">删</button>
+    </div>`).join("") || `<div class="hint">还没有记忆。每次回答后会自动提炼。</div>`;
+}
+function openMem(){ renderMemList(); document.getElementById("memmask").style.display = "flex"; }
+function closeMem(){ document.getElementById("memmask").style.display = "none"; }
+function addMemManual(){ const t = prompt("要记住什么？"); if(t!=null) MEM.add(t); }
+
+/* 后台提炼：回答结束后异步执行，失败静默 */
+async function distill(q, ans, cfg){
+  try{
+    const r = await fetch(cfg.base + "/chat/completions", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
+      body: JSON.stringify({model: cfg.mdl, stream:false, temperature:0.3,
+        messages:[
+          {role:"system", content:"你负责维护用户的长期记忆。从这轮问答中提炼【值得长期记住】的用户信息：年级专业、学习进度、薄弱科目、偏好、长期目标、正在面对的事。只输出提炼结果，每条一行，最多 2 条，每条不超过 40 字；不要编号、不要解释、不要客套。严禁提炼任何来自联网检索的时事、新闻或外部资讯——只提炼用户本人的长期信息。若没有值得长期记住的内容，只输出 NONE。"},
+          {role:"user", content:`【用户提问】\n${q}\n\n【回答要点】\n${String(ans).slice(0,1200)}`}
+        ]})
+    });
+    if(!r.ok) return;
+    const j = await r.json();
+    const out = (j.choices?.[0]?.message?.content || "").trim();
+    if(!out || /^NONE/i.test(out)) return;
+    out.split("\n")
+       .map(s=>s.replace(/^[\s\d.、（）()\-*#]+/,"").trim())
+       .filter(s=>s.length>=4 && s.length<=60 && !/^NONE$/i.test(s))
+       .slice(0,2).forEach(s=>MEM.add(s));
+  }catch(e){ /* 静默 */ }
+}
+
+/* ============ 联网参考（与窑洞一号同构）
+   三条铁律：① 隔离（只进当轮上下文，刷新即清，不进长期记忆）
+            ② 文库优先（联网只是补充，冲突以原文为准）
+            ③ 能通则用、不通即降级（硬超时，失败静默） */
+const WIKI_ZH = "https://zh.wikipedia.org/w/api.php";
+const WIKI_EN = "https://en.wikipedia.org/w/api.php";
+
+const NET_SRC = [
+  { id:"bocha", name:"博查 Web Search", kind:"bocha", needKey:true, need:false,
+    desc:"约 50ms 响应，结果带正文摘要 · 需自备博查 API Key（有免费额度）",
+    hint:"博查 API Key，形如 sk-xxxxxxxx" },
+  { id:"zhipu", name:"智谱 Web Search", kind:"zhipu", needKey:true, need:false,
+    desc:"约 200ms 响应 · 需自备智谱 API Key",
+    hint:"智谱 API Key，形如 xxxxxxxx.xxxxxxxx" },
+  { id:"zhwiki", name:"中文维基百科", kind:"zhwiki", need:true,
+    desc:"免 Key · 搜索条目并取首段摘要 · 原生跨域（origin=*）",
+    probe:"https://zh.wikipedia.org/w/api.php?action=query&format=json&origin=*&meta=siteinfo" },
+  { id:"enwiki", name:"英文维基百科", kind:"enwiki", need:true,
+    desc:"免 Key · 英文条目更全，适合查概念、术语、人名",
+    probe:"https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&meta=siteinfo" },
+  { id:"jina", name:"Jina Reader", kind:"jina", need:true,
+    desc:"免 Key · 抓取任意网页正文并转纯文本（适合直接贴链接）",
+    probe:"https://r.jina.ai/https://example.com" },
+  { id:"bingrss", name:"必应搜索 RSS", kind:"bingrss", need:true,
+    desc:"免 Key · 域名国内可连，但无跨域头，须科学上网后经代理包装",
+    probe:"https://cn.bing.com/search?q=test&format=rss" },
+  { id:"pmd", name:"PubMed 文献摘要", kind:"pmd", need:false,
+    desc:"免 Key ·  NIH 官方接口，可直连 · 查英文医学文献题录与摘要（供学习参考）",
+    probe:"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=shock&retmode=json&retmax=1" },
+  { id:"gxmu", name:"广西医科大学官网（含内网查看）", kind:"gxmu", need:false,
+    desc:"实时抓校网各栏目 · 需在本机运行校园网代理（web/gxmu_proxy.py）；连着校园网时连「内网查看」也能读到。代理没开则自动降级为公开栏目",
+    probe:"http://127.0.0.1:8898/ping" },
+];
+
+const escA = s => String(s==null?"":s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const NET = {
+  K:"sz2_net", KK:"sz2_netkeys", TIMEOUT:6000, PER_SRC:3, MAX_CHARS:3600,
+  on:false, hits:0, ok:0, warned:false, cache:{}, lastProbe:{},
+  load(){ this.on = localStorage.getItem(this.K) === "1"; },
+  save(){ try{ localStorage.setItem(this.K, this.on?"1":"0"); }catch(e){} },
+
+  keys(){ try{ return JSON.parse(localStorage.getItem(this.KK)||"{}") || {}; }catch(e){ return {}; } },
+  key(id){ return String(this.keys()[id]||"").trim(); },
+  setKey(id, v){
+    const k = this.keys(); k[id] = String(v||"").trim();
+    try{ localStorage.setItem(this.KK, JSON.stringify(k)); }catch(e){}
+  },
+
+  KC:"sz2_netch",
+  chans(){ try{ return JSON.parse(localStorage.getItem(this.KC)||"{}") || {}; }catch(e){ return {}; } },
+  isOn(id){ return this.chans()[id] !== false; },
+  setChan(id, on){
+    const c = this.chans(); c[id] = !!on;
+    try{ localStorage.setItem(this.KC, JSON.stringify(c)); }catch(e){}
+    this.cache = {};
+  },
+
+  setSw(v){
+    this.on = !!v; this.save(); this.warned = false;
+    applyNet(); renderNetStat();
+    if(this.on) this.probeAll();
+  },
+  reset(){
+    this.hits = 0; this.ok = 0; this.warned = false; this.cache = {};
+    renderNetStat();
+    const p = document.getElementById("netprobe"); if(p) p.textContent = "";
+  },
+
+  async _t(url, ms, opt){
+    const ac = new AbortController();
+    const timer = setTimeout(()=>ac.abort(), ms || this.TIMEOUT);
+    try{
+      const r = await fetch(url, Object.assign({signal:ac.signal, cache:"no-store"}, opt||{}));
+      clearTimeout(timer);
+      return r;
+    }catch(e){ clearTimeout(timer); throw e; }
+  },
+
+  async _wiki(base, q){
+    const u = base + "?action=query&format=json&origin=*&generator=search"
+      + "&gsrsearch=" + encodeURIComponent(q)
+      + "&gsrlimit=" + this.PER_SRC
+      + "&prop=extracts&exintro=1&explaintext=1&exlimit=" + this.PER_SRC;
+    const r = await this._t(u, this.TIMEOUT);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const pages = Object.values((j && j.query && j.query.pages) || {});
+    return pages
+      .sort((a,b)=>(a.index||99)-(b.index||99))
+      .filter(p=>p.extract && p.extract.replace(/\s+/g,"").length > 40)
+      .map(p=>({t:p.title, x:p.extract.replace(/\s+/g," ").trim().slice(0,500)}));
+  },
+
+  async _bocha(q){
+    const k = this.key("bocha"); if(!k) return [];
+    const r = await this._t("https://api.bochaai.com/v1/web-search", this.TIMEOUT, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+k},
+      body: JSON.stringify({query:q, count:this.PER_SRC, summary:true, freshness:"noLimit"})
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const arr = (j && j.data && j.data.webPages && j.data.webPages.value) || [];
+    return arr.slice(0, this.PER_SRC).map(p=>({
+      t: p.name || p.siteName || "（无标题）",
+      x: String(p.summary || p.snippet || "").replace(/\s+/g," ").trim().slice(0,500)
+    })).filter(x=>x.x.length > 20);
+  },
+
+  async _zhipu(q){
+    const k = this.key("zhipu"); if(!k) return [];
+    const r = await this._t("https://open.bigmodel.cn/api/paas/v4/web_search", this.TIMEOUT, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+k},
+      body: JSON.stringify({search_engine:"search_std", search_query:q})
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j = await r.json();
+    const arr = (j && j.search_result) || [];
+    return arr.slice(0, this.PER_SRC).map(p=>({
+      t: p.title || p.media || "（无标题）",
+      x: String(p.content || "").replace(/\s+/g," ").trim().slice(0,500)
+    })).filter(x=>x.x.length > 20);
+  },
+
+  /* PubMed：esearch 取 PMID → efetch 取摘要（医学专用通道） */
+  async _pubmed(q){
+    const eu = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+    const s = await this._t(eu + "esearch.fcgi?db=pubmed&retmode=json&retmax="
+      + this.PER_SRC + "&term=" + encodeURIComponent(q), this.TIMEOUT);
+    if(!s.ok) throw new Error("HTTP "+s.status);
+    const sj = await s.json();
+    const ids = ((sj && sj.esearchresult && sj.esearchresult.idlist) || []).slice(0, this.PER_SRC);
+    if(!ids.length) return [];
+    const f = await this._t(eu + "efetch.fcgi?db=pubmed&retmode=text&rettype=abstract&id="
+      + ids.join(","), this.TIMEOUT);
+    if(!f.ok) throw new Error("HTTP "+f.status);
+    const txt = await f.text();
+    return txt.split(/\n\s*\n/).filter(x=>x.trim().length > 60).slice(0, this.PER_SRC).map(seg=>{
+      const t = seg.trim().split("\n")[0].slice(0, 160);
+      return {t: t || "（PubMed 条目）", x: seg.trim().replace(/\s+/g," ").slice(0, 700)};
+    });
+  },
+
+  /* 校网：本页若就是代理托管的（http://127.0.0.1:8898/）→ 同源直接读；
+     否则（github.io 的 HTTPS 页）尝试跨到本地，但浏览器会因「混合内容」拦下，属预期。 */
+  GXMU_PORT: 8898,
+  gxmuBase(){
+    const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+    return (local && String(location.port) === String(this.GXMU_PORT))
+      ? ""                                        /* 同源：代理本身就是网站 */
+      : "http://127.0.0.1:" + this.GXMU_PORT;     /* 远端页：跨到本地（多半被拦） */
+  },
+  async _gxmu(q){
+    const P = this.gxmuBase();
+    let via = "本机代理";
+    try{
+      const r = await this._t(P + "/search?q=" + encodeURIComponent(q) + "&n=4", 12000);
+      if(r.ok){
+        const j = await r.json();
+        if(j && j.hits && j.hits.length){
+          return j.hits.map(h => ({
+            t: (h.sectionName ? "[" + h.sectionName + "] " : "") + (h.title || "（无标题）"),
+            x: ((h.date ? h.date + "　" : "") + String(h.snippet || h.sectionName || "")
+                 .replace(/\s+/g, " ").trim()).slice(0, 600)
+          })).filter(x => x.x.length > 15);
+        }
+      }
+    }catch(e){ /* 代理没开或超时，走降级 */ }
+
+    via = "公开栏目";
+    try{
+      const r2 = await this._t("https://r.jina.ai/https://www.gxmu.edu.cn/xwgk/wwtz/", 14000);
+      if(r2.ok){
+        const t = String(await r2.text() || "").replace(/\s+/g, " ").trim();
+        if(t.length > 150)
+          return [{ t:"[公开栏目] 广西医科大学 · 通知公告", x:t.slice(0, 1200) }];
+      }
+    }catch(e){}
+    return [];
+  },
+
+  async _search(id, q){
+    const ck = id + "\u0000" + q;
+    if(this.cache[ck]) return this.cache[ck];
+    const kind = (NET_SRC.find(x=>x.id===id)||{}).kind;
+    let out = [];
+    if(kind === "bocha")       out = await this._bocha(q);
+    else if(kind === "zhipu")  out = await this._zhipu(q);
+    else if(kind === "zhwiki") out = await this._wiki(WIKI_ZH, q);
+    else if(kind === "enwiki") out = await this._wiki(WIKI_EN, q);
+    else if(kind === "pmd")    out = await this._pubmed(q);
+    else if(kind === "gxmu")   out = await this._gxmu(q);
+    this.cache[ck] = out;
+    return out;
+  },
+
+  async probeOne(s){
+    if(s.needKey && !this.key(s.id))
+      return {id:s.id, ok:false, ms:0, skip:true, note:"未填写 Key"};
+    const t0 = performance.now();
+    try{
+      if(s.needKey){
+        const items = await this._search(s.id, "高血压");
+        const ms = Math.round(performance.now()-t0);
+        return items.length
+          ? {id:s.id, ok:true, ms, note:"检索正常，返回 "+items.length+" 条"}
+          : {id:s.id, ok:false, ms, note:"有响应但无结果（Key 可能无效或无额度）"};
+      }
+      const pUrl = (s.id === "gxmu") ? (this.gxmuBase() + "/ping") : s.probe;
+      const r = await this._t(pUrl, 8000);
+      const ms = Math.round(performance.now()-t0);
+      if(!r.ok) return {id:s.id, ok:false, ms, note:"HTTP "+r.status};
+      const txt = await r.text();
+      if(!txt || txt.length < 20) return {id:s.id, ok:false, ms, note:"响应为空（疑被跨域拦截）"};
+      return {id:s.id, ok:true, ms, note:"可读 " + txt.length + " 字节"};
+    }catch(e){
+      const ms = Math.round(performance.now()-t0);
+      return {id:s.id, ok:false, ms,
+              note:(e && e.name === "AbortError") ? "超时/被阻断（"+ms+"ms）" : "不可达或被跨域拦截"};
+    }
+  },
+
+  async probeAll(){
+    this.cache = {};
+    const box = document.getElementById("netprobe");
+    renderNetList({});
+    if(box) box.textContent = "正在检测…（各通道并发，最长 8 秒）";
+    const res = await Promise.all(NET_SRC.map(s=>this.probeOne(s)));
+    const map = {}; res.forEach(r=>map[r.id] = r);
+    this.lastProbe = map;
+    renderNetList(map);
+    const okN = res.filter(r=>r.ok).length;
+    const domestic = res.filter(r=>r.ok && ["bocha","zhipu","pmd"].includes(r.id)).length;
+    if(box) box.innerHTML = okN
+      ? `<b style="color:var(--ok)">${okN}/${res.length} 条通道可用</b>`
+        + (domestic ? "，其中含可直连通道 —— 可以开启联网参考了。"
+                    : " —— 可以开启联网参考了（走的是需要科学上网的境外通道）。")
+      : `<b style="color:#e07a6a">0/${res.length} 条通道可用</b>。<br>
+         <b>可直连通道</b>（PubMed / 博查 / 智谱）：PubMed 免 Key 可直接用，博查与智谱需填自己的搜索 API Key；<br>
+         <b>境外通道</b>（维基百科 / Jina / 必应）需要开启科学上网后回来重测。<br>
+         眼下联网参考会自动降级跳过，<b>文库问答完全不受影响</b>。`;
+  },
+
+  async gather(q){
+    if(!this.on || !q) return {txt:"", list:[], note:""};
+    this.hits++;
+    const avail = NET_SRC.filter(s => this.isOn(s.id) && (!s.needKey || this.key(s.id)));
+    const outs = await Promise.all(avail.map(async s=>{
+      try{
+        const arr = await this._search(s.id, q);
+        return arr.length ? {src:s.name, items:arr} : null;
+      }catch(e){ return null; }
+    }));
+    const got = outs.filter(Boolean);
+    renderNetStat();
+    if(!got.length){
+      let note = "本轮联网未取到内容。";
+      const enabled = NET_SRC.filter(s => this.isOn(s.id));
+      if(enabled.length === 0)
+        note += "当前所有联网通道都被你用开关关掉了——在「🌐 联网参考」面板里打开需要的通道。";
+      else if(avail.length === 0)
+        note += "已启用的通道都还没填搜索 Key（博查/智谱需自备 Key），且未开启科学上网（境外通道需代理）—— 当前只能在文库内作答。";
+      else
+        note += "可能该话题触发了搜索源的内容合规过滤，或通道暂不可达；已自动跳过，文库回答不受影响。";
+      return {txt:"", list:[], note};
+    }
+    this.ok++;
+    const seen = new Set(), list = [], lines = [];
+    let chars = 0;
+    for(const g of got){
+      for(const it of g.items){
+        if(seen.has(it.t)) continue;
+        seen.add(it.t);
+        if(chars + it.x.length > this.MAX_CHARS) continue;
+        list.push({src:g.src, t:it.t});
+        lines.push(`〔网${list.length}〕${g.src} · ${it.t}\n${it.x}`);
+        chars += it.x.length;
+      }
+    }
+    if(!list.length) return {txt:"", list:[], note:"本轮联网各源返回的结果均过短被丢弃，已自动跳过。"};
+    return {txt: lines.join("\n\n"), list};
+  }
+};
+
+function renderNetList(map){
+  const box = document.getElementById("netlist"); if(!box) return;
+  box.innerHTML = NET_SRC.map(s=>{
+    const r = map && map[s.id];
+    const st = !r ? `<span class="st">未检测</span>`
+      : r.ok ? `<span class="st ok">通 ${r.ms}ms</span>`
+      : r.skip ? `<span class="st">未配置</span>`
+               : `<span class="st bad">不通</span>`;
+    const tag = s.need
+      ? `<span class="tag">需科学上网</span>`
+      : `<span class="tag" style="border-color:#3a5a4a;color:#7fb069">可直接连</span>`;
+    const keyRow = s.needKey
+      ? `<div style="margin-top:6px"><input type="password" autocomplete="off"
+           placeholder="${escA(s.hint||"API Key")}" value="${escA(NET.key(s.id))}"
+           onchange="netKeyChange('${s.id}', this)"
+           style="width:100%;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:12.5px"></div>`
+      : "";
+    const on = NET.isOn(s.id);
+    const swRow = `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);white-space:nowrap;cursor:pointer">
+        <input type="checkbox" ${on?"checked":""} onchange="netChanChange('${s.id}', this.checked)"
+          style="width:auto;margin:0;flex-shrink:0">启用</label>`;
+    return `<div class="srcrow" style="${on?"":"opacity:.45"}">
+      <div class="nm">${esc(s.name)}${tag}<i>${esc(s.desc)}</i>${keyRow}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${st}${swRow}</div>
+    </div>`;
+  }).join("");
+}
+function netChanChange(id, on){
+  NET.setChan(id, on);
+  renderNetList(NET.lastProbe);
+}
+function netKeyChange(id, el){
+  NET.setKey(id, el.value);
+  NET.cache = {};
+  const s = NET_SRC.find(x=>x.id===id); if(!s) return;
+  NET.probeOne(s).then(r=>{
+    const m = Object.assign({}, NET.lastProbe); m[id] = r;
+    NET.lastProbe = m; renderNetList(m);
+  });
+}
+function renderNetStat(){
+  const el = document.getElementById("netstat"); if(!el) return;
+  el.innerHTML = `本次会话：联网检索 ${NET.hits} 次，成功取回 ${NET.ok} 次；缓存 ${Object.keys(NET.cache).length} 条（仅存内存，刷新即清）。`;
+}
+function applyNet(){
+  const b = document.getElementById("netbtn");
+  if(b){ b.classList.toggle("on", NET.on); b.textContent = "🌐 联网：" + (NET.on?"开":"关"); }
+  const sw = document.getElementById("netsw");
+  if(sw) sw.checked = NET.on;
+}
+function toggleNet(){ NET.setSw(!NET.on); }
+function openNet(){
+  renderNetList(NET.lastProbe); renderNetStat(); applyNet();
+  document.getElementById("netmask").style.display = "flex";
+}
+function closeNet(){ document.getElementById("netmask").style.display = "none"; }
+
+/* ============ 设置 ============ */
+function openSet(){
+  document.getElementById("base").value = localStorage.getItem("sz2_base")||"https://api.deepseek.com/v1";
+  document.getElementById("key").value = localStorage.getItem("sz2_key")||"";
+  document.getElementById("model").value = localStorage.getItem("sz2_model")||"deepseek-v4-flash";
+  document.getElementById("base2").value = localStorage.getItem("sz2_base2")||"";
+  document.getElementById("key2").value  = localStorage.getItem("sz2_key2")||"";
+  document.getElementById("model2").value= localStorage.getItem("sz2_model2")||"";
+  document.getElementById("mdlthink").value = localStorage.getItem("sz2_mdlthink")||"";
+  document.getElementById("vmodel").value = localStorage.getItem("sz2_vmodel")||"";
+  document.getElementById("dmodel").value = localStorage.getItem("sz2_dmodel")||"";
+  document.getElementById("ibase").value = localStorage.getItem("sz2_ibase")||"";
+  document.getElementById("ikey").value  = localStorage.getItem("sz2_ikey")||"";
+  document.getElementById("imodel").value= localStorage.getItem("sz2_imodel")||"";
+  document.getElementById("npw").value = "";
+  document.getElementById("qfs").value = localStorage.getItem("sz2_qfs")||"15";
+  document.getElementById("qcolor").value = localStorage.getItem("sz2_qcolor")||"#e3eef0";
+  document.getElementById("afs").value = localStorage.getItem("sz2_afs")||"15";
+  document.getElementById("acolor").value = localStorage.getItem("sz2_acolor")||"#e3eef0";
+  document.getElementById("tspeed").value = localStorage.getItem("sz2_tspeed")||"25";
+  document.getElementById("mask").style.display = "flex";
+  checkVer();          /* 打开设置时顺手查一下版本 */
+}
+function closeSet(){ document.getElementById("mask").style.display = "none"; }
+async function clearLocal(){
+  if(!confirm("确定清除本机所有数据（密码、API Key、设置、会话）？\n此操作只影响你当前这台设备。")) return;
+  localStorage.clear();
+  sessionStorage.clear();
+  location.reload();
+}
+async function saveSet(){
+  /* 保存前做一次「填错栏」体检 —— 最常见的错误是把网址粘进 Key、把密钥粘进接口地址 */
+  const _k = document.getElementById("key").value.trim();
+  const _k2 = document.getElementById("key2").value.trim();
+  const _base = document.getElementById("base").value.trim();
+  for(const [name, v] of [["API Key", _k], ["备用 API Key", _k2]]){
+    if(v && (/^https?:\/\//i.test(v) || /\/$/.test(v))){
+      if(!confirm(`⚠ 「${name}」里填的内容是：\n\n${v.slice(0,90)}\n\n这看起来是网址而不是密钥。API Key 一般以 sk- 开头。\n\n仍然保存吗？（建议先改成正确的 Key）`)) return;
+    }
+  }
+  if(_base && /^sk-/i.test(_base)){
+    if(!confirm(`⚠ 「接口地址」里填的像是密钥：\n\n${_base.slice(0,60)}\n\n接口地址应形如 https://api.deepseek.com/v1\n\n仍然保存吗？`)) return;
+  }
+  localStorage.setItem("sz2_base", document.getElementById("base").value.trim());
+  localStorage.setItem("sz2_key",  document.getElementById("key").value.trim());
+  localStorage.setItem("sz2_model",document.getElementById("model").value.trim());
+  localStorage.setItem("sz2_base2", document.getElementById("base2").value.trim());
+  localStorage.setItem("sz2_key2",  document.getElementById("key2").value.trim());
+  localStorage.setItem("sz2_model2",document.getElementById("model2").value.trim());
+  localStorage.setItem("sz2_mdlthink", document.getElementById("mdlthink").value.trim());
+  localStorage.setItem("sz2_vmodel", document.getElementById("vmodel").value.trim());
+  localStorage.setItem("sz2_dmodel", document.getElementById("dmodel").value.trim());
+  localStorage.setItem("sz2_ibase", document.getElementById("ibase").value.trim());
+  localStorage.setItem("sz2_ikey",  document.getElementById("ikey").value.trim());
+  localStorage.setItem("sz2_imodel",document.getElementById("imodel").value.trim());
+  localStorage.setItem("sz2_qfs", document.getElementById("qfs").value);
+  localStorage.setItem("sz2_qcolor", document.getElementById("qcolor").value);
+  localStorage.setItem("sz2_afs", document.getElementById("afs").value);
+  localStorage.setItem("sz2_acolor", document.getElementById("acolor").value);
+  localStorage.setItem("sz2_tspeed", document.getElementById("tspeed").value);
+  applyFont(); applyModel();
+  const np = document.getElementById("npw").value.trim();
+  if(np){ localStorage.setItem("sz2_pw", await sha256(np)); alert("访问密码已更新，请牢记：" + np); }
+  closeSet();
+}
+document.getElementById("mask").addEventListener("click", e=>{ if(e.target.id==="mask") closeSet(); });
+document.getElementById("sesmask").addEventListener("click", e=>{ if(e.target.id==="sesmask") closeSess(); });
+document.getElementById("memmask").addEventListener("click", e=>{ if(e.target.id==="memmask") closeMem(); });
+document.getElementById("netmask").addEventListener("click", e=>{ if(e.target.id==="netmask") closeNet(); });
+
+/* ============ 输入 ============ */
+const ta = document.getElementById("q");
+ta.addEventListener("input", ()=>{ ta.style.height="auto"; ta.style.height=Math.min(ta.scrollHeight,130)+"px"; });
+ta.addEventListener("keydown", e=>{
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); ask(); }
+});
+document.querySelectorAll("#modelchips .chip").forEach(c=>{
+  c.onclick = ()=>{ document.getElementById("model").value = c.dataset.m; };
+});
+document.querySelectorAll("#vchips .chip").forEach(c=>{
+  c.onclick = ()=>{ document.getElementById("vmodel").value = c.dataset.v; };
+});
+["qfs","qcolor","afs","acolor","tspeed"].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener("input", ()=>{ localStorage.setItem("sz2_"+id, el.value); applyFont(); });
+});
+
+/* ============ 自动更新：版本检测 + Service Worker ============ */
+let _ver = "", _updShown = false;
+async function checkVer(){
+  try{
+    const r = await fetch("version.json?t=" + Date.now(), {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    if(!j || !j.build) return;
+    const vh = document.getElementById("verhint");
+    if(!_ver){
+      _ver = j.build;                              /* 首次只记录基线，不提示 */
+      if(vh) vh.textContent = "当前版本：" + _ver + "（已是最新）";
+      return;
+    }
+    if(j.build !== _ver){
+      if(vh) vh.textContent = "当前版本：" + _ver + "　→　线上新版：" + j.build;
+      if(!_updShown){
+        _updShown = true;
+        const b = document.getElementById("updbar");
+        if(b) b.style.display = "flex";
+        if(document.title.indexOf("🔄") !== 0) document.title = "🔄 " + document.title;
+      }
+    } else if(vh){
+      vh.textContent = "当前版本：" + _ver + "（已是最新）";
+    }
+  }catch(e){ /* 离线或取不到就算了 */ }
+  /* 顺手催一下 Service Worker 检查有没有新版本 */
+  try{
+    const rs = await navigator.serviceWorker.getRegistrations();
+    rs.forEach(r => r.update());
+  }catch(e){}
+}
+function hardReload(){
+  (async () => {
+    try{
+      if(window.caches){ const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+    }catch(e){}
+    location.reload();
+  })();
+}
+(function(){
+  const secure = location.protocol === "https:" ||
+                 ["localhost","127.0.0.1"].indexOf(location.hostname) >= 0;
+  if("serviceWorker" in navigator && secure){
+    navigator.serviceWorker.register("sw.js", {updateViaCache:"none"}).catch(()=>{});
+    /* 已有 SW 在控制页面时，新 SW 接管后自动重载（首次注册不触发，避免多余刷新） */
+    if(navigator.serviceWorker.controller){
+      let done = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if(done) return;
+        done = true;
+        location.reload();
+      });
+    }
+  }
+  /* 快捷方式参数：./?m=quiz 或 ./?m=outline */
+  try{
+    const m = new URLSearchParams(location.search).get("m");
+    if(m === "quiz" || m === "outline"){ _mode = m; setModeTag(); }
+  }catch(e){}
+  /* 定时 + 切回前台时检查更新 */
+  setTimeout(checkVer, 3000);
+  setInterval(checkVer, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) checkVer(); });
+})();
+
+/* ============ 桌面版：文库导航 + 阅读面板（移植自窑洞一号，catOf 适配蛇杖索引）============ */
+function catOf(f){
+  if(f.indexOf("01_教材")>=0) return "① 教材";
+  if(f.indexOf("02_课件题库")>=0) return "② 课件题库";
+  if(f.indexOf("03_学科")>=0) return "③ 学科资料";
+  if(f.indexOf("00_待入库")>=0) return "④ 待入库";
+  return "⑤ 其他";
+}
+const _CAT_ORDER = ["① 教材","② 课件题库","③ 学科资料","④ 待入库","⑤ 其他"];
+let _docsAll = [];
+function buildSidebar(){
+  if(!DOCS || !DOCS.length) return;
+  _docsAll = DOCS.slice();
+  renderDocList(_docsAll);
+  const sf = document.getElementById("sidefoot");
+  if(sf) sf.textContent = DOCS.length + " 部文献 · 离线可用";
+}
+function renderDocList(docs){
+  const list = document.getElementById("doclist");
+  if(!list) return;
+  list.innerHTML = "";
+  const groups = {};
+  for(const d of docs){
+    const c = catOf(d.f);
+    (groups[c] = groups[c] || []).push(d);
+  }
+  const order = _CAT_ORDER.filter(c => groups[c]).concat(
+    Object.keys(groups).filter(c => _CAT_ORDER.indexOf(c) < 0).sort()
+  );
+  for(const c of order){
+    const h = document.createElement("div");
+    h.className = "cat"; h.textContent = c; list.appendChild(h);
+    for(const d of groups[c]){
+      const it = document.createElement("div");
+      it.className = "doc"; it.textContent = (d.t || d.f); it.title = d.f;
+      it.onclick = () => {
+        document.querySelectorAll(".doc").forEach(x => x.classList.remove("on"));
+        it.classList.add("on"); openDoc(d);
+      };
+      list.appendChild(it);
+    }
+  }
+}
+function filterDocs(q){
+  q = (q || "").trim().toLowerCase();
+  if(!q){ renderDocList(_docsAll); return; }
+  const hit = _docsAll.filter(d => {
+    if((d.t||"").toLowerCase().indexOf(q) >= 0) return true;
+    if((d.f||"").toLowerCase().indexOf(q) >= 0) return true;
+    if(d.s && d.s.some(s => (s[0]||"").toLowerCase().indexOf(q) >= 0)) return true;
+    return false;
+  });
+  renderDocList(hit);
+}
+function showReader(){
+  document.getElementById("chat").style.display = "none";
+  document.getElementById("bar").style.display = "none";
+  const ub = document.getElementById("updbar"); if(ub) ub.style.display = "none";
+  document.getElementById("reader").style.display = "flex";
+}
+function showChat(){
+  document.getElementById("reader").style.display = "none";
+  document.getElementById("chat").style.display = "block";
+  document.getElementById("bar").style.display = "block";
+  const c = document.getElementById("chat");
+  c.scrollTop = c.scrollHeight;
+}
+function openDoc(d){
+  showReader();
+  document.getElementById("rdTitle").textContent = d.t || d.f;
+  document.getElementById("rdSub").textContent = d.f + " · " + (d.s ? d.s.length : 0) + " 章 · " + Math.round(d.n/1024) + " KB";
+  const rl = document.getElementById("rdList");
+  const rt = document.getElementById("rdText");
+  if(!d.s || !d.s.length){ rl.innerHTML = ""; rt.innerHTML = '<div class="rdhint">本篇为总览 / 索引，无分章正文。</div>'; return; }
+  rl.innerHTML = "";
+  d.s.forEach((sec, i) => {
+    const b = document.createElement("button");
+    b.className = "chap"; b.textContent = (sec[0] || ("第" + (i+1) + "节")); b.title = sec[0] || "";
+    b.onclick = () => {
+      document.querySelectorAll(".chap").forEach(x => x.classList.remove("on"));
+      b.classList.add("on"); openSec(d, i);
+    };
+    rl.appendChild(b);
+  });
+  openSec(d, 0);
+}
+async function readSec(d, i){
+  const a = d.s[i][1];
+  const b = (i+1 < d.s.length) ? d.s[i+1][1] : d.n;
+  /* 走 fetchRange 分片取文（同源 Pages 优先 + raw 备用 + 整卷兜底），不再整卷下载 */
+  return await fetchRange(d.f, a, b);
+}
+async function openSec(d, i){
+  const rt = document.getElementById("rdText");
+  rt.innerHTML = '<div class="rdhint">正在调取原文…</div>';
+  let txt = "";
+  try { txt = await readSec(d, i); } catch(e){ txt = "（原文调取失败：" + e.message + "）"; }
+  rt.textContent = "";
+  const h = document.createElement("div"); h.className = "rdchap"; h.textContent = d.s[i][0] || ("第" + (i+1) + "节");
+  const body = document.createElement("div"); body.className = "rdbody"; body.textContent = (txt && txt.trim()) ? txt : "（本章暂无正文）";
+  rt.appendChild(h); rt.appendChild(body);
+  rt.scrollTop = 0;
+}
+function renderHome(){
+  showReader();
+  document.getElementById("rdTitle").textContent = "蛇杖二号 · 文库";
+  document.getElementById("rdSub").textContent = (DOCS.length) + " 部教材 / 课件 / 学科资料 · 完全离线";
+  const rl = document.getElementById("rdList");
+  rl.innerHTML = '<div class="rdhint">← 在左侧「文库导航」挑一部文献</div>';
+  const rt = document.getElementById("rdText");
+  rt.innerHTML = "";
+  let secCount = 0; try { secCount = DOCS.reduce((a,d) => a + (d.s ? d.s.length : 0), 0); } catch(e){}
+  const chips = (typeof GUIDE !== "undefined" && GUIDE) ? GUIDE.map(g => '<span class="gchip">'+g.name+'</span>').join("") : "";
+  const wrap = document.createElement("div");
+  wrap.className = "home";
+  wrap.innerHTML =
+    '<div class="homeh">欢迎来到蛇杖二号桌面版</div>' +
+    '<p class="homep">这里是医学教材原文知识库，所有内容都在你本机，断网也能读、能检索。左侧按「教材 / 课件题库 / 学科资料」分类浏览，点文献再点章节即可读原文。</p>' +
+    '<div class="homegrid">' +
+      '<div class="homecard"><div class="hc">'+DOCS.length+'</div><div>部文献可阅</div></div>' +
+      '<div class="homecard"><div class="hc">'+secCount+'</div><div>个章节</div></div>' +
+      '<div class="homecard"><div class="hc">离线</div><div>检索 / 阅读</div></div>' +
+    '</div>' +
+    '<div class="homet">学业导航（直接问，或先读这些篇目）</div>' +
+    '<div class="chips">'+chips+'</div>' +
+    '<p class="hometip">顶部「📚 文库」进入阅读；左侧栏按分类浏览；底部对话框随时向教材原文请教、拿主意。问答与联网需在「设置」里填自己的 API Key。</p>';
+  rt.appendChild(wrap);
+}
+
+/* ============ PWA：安装 ============ */
+var _defPrompt = null;
+window.addEventListener("beforeinstallprompt", function(e){
+  e.preventDefault(); _defPrompt = e;
+  var b = document.getElementById("installBtn"); if(b) b.style.display = "";
+});
+window.addEventListener("appinstalled", function(){
+  var b = document.getElementById("installBtn"); if(b) b.style.display = "none";
+});
+function szInstall(){
+  if(_defPrompt){ _defPrompt.prompt(); if(_defPrompt.userChoice && _defPrompt.userChoice.finally){ _defPrompt.userChoice.finally(function(){ _defPrompt = null; }); } }
+}
+
+/* ============ 手机端：侧栏/章节列表抽屉交互 ============ */
+function toggleSide(){ document.body.classList.toggle("side-open"); }
+function closeSide(){ document.body.classList.remove("side-open"); }
+function toggleRdList(){ document.body.classList.toggle("reader-list-open"); }
+function closeRdList(){ document.body.classList.remove("reader-list-open"); }
+(function(){
+  var dl = document.getElementById("doclist");
+  if(dl) dl.addEventListener("click", function(e){ if(e.target.closest(".doc")) closeSide(); });
+  var rdl = document.querySelector(".rdlist");
+  if(rdl) rdl.addEventListener("click", function(e){ if(e.target.closest(".chap")) closeRdList(); });
+})();
+
+/* ============ 启动（放在最后：此时 SS / MEM / 各函数均已就绪）============ */
+SS.load();
+MEM.load();
+NET.load();
+renderMemCount();
+checkStatus();
+boot();
+applyFont();
+applyModel();
+applyThink();
+applyNet();
+renderNetStat();
+
+/* ============ 待办 / 官网公告 · 抽屉 ============
+   动态注入，不动原有 DOM 结构。数据来自 data/todo.json，
+   由本机 bridge 每次同步时导出（默认只含官网/图书馆公告，不含 QQ 群）。 */
+(function(){
+  var CSS = [
+    "#tododrawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,92vw);z-index:9999;",
+    "background:#fff;border-left:1px solid #e3e6ea;box-shadow:-8px 0 28px rgba(16,24,40,.12);",
+    "transform:translateX(101%);transition:transform .26s cubic-bezier(.4,0,.2,1);",
+    "display:flex;flex-direction:column;font-size:14px;color:#1f2328}",
+    "#tododrawer.open{transform:translateX(0)}",
+    "#todomask{position:fixed;inset:0;background:rgba(16,24,40,.35);z-index:9998;display:none}",
+    "#todomask.open{display:block}",
+    "#tododrawer .th{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid #e3e6ea}",
+    "#tododrawer .th b{font-size:15px;font-weight:600}",
+    "#tododrawer .th .sp{flex:1}",
+    "#tododrawer .th button{border:1px solid #d5d9e0;background:#fff;border-radius:7px;",
+    "padding:4px 10px;cursor:pointer;font-size:12px;color:#475467}",
+    "#tododrawer .body{flex:1;overflow-y:auto;padding:12px 16px 24px}",
+    "#tododrawer .grp{margin:12px 0 6px;font-size:12px;color:#667085;font-weight:600}",
+    "#tododrawer .it{padding:9px 11px;border:1px solid #e3e6ea;border-radius:9px;margin-bottom:7px;background:#fcfcfd}",
+    "#tododrawer .it .t{font-weight:500;line-height:1.45}",
+    "#tododrawer .it .m{margin-top:4px;font-size:11.5px;color:#667085;display:flex;gap:10px;flex-wrap:wrap}",
+    "#tododrawer .it.P0{border-left:3px solid #d92d20}#tododrawer .it.P1{border-left:3px solid #f79009}",
+    "#tododrawer .it.P2{border-left:3px solid #eaaa08}#tododrawer .it.P3{border-left:3px solid #98a2b3}",
+    "#tododrawer .empty{text-align:center;color:#98a2b3;padding:48px 0}",
+    "#tododrawer .foot{padding:9px 16px;border-top:1px solid #e3e6ea;font-size:11px;color:#98a2b3}",
+    "#tododrawer .ttabs{display:flex;gap:6px;padding:8px 12px 0;border-bottom:1px solid rgba(0,0,0,.08)}",
+    "#tododrawer .ttabs button{border:0;background:transparent;padding:7px 12px;font:inherit;font-size:13px;color:#667085;cursor:pointer;border-bottom:2px solid transparent}",
+    "#tododrawer .ttabs button.on{color:#1f2328;font-weight:600;border-bottom-color:#3b82f6}",
+  ].join("");
+  var st = document.createElement("style"); st.textContent = CSS; document.head.appendChild(st);
+
+  var mask = document.createElement("div"); mask.id = "todomask";
+  mask.onclick = function(){ closeTodoDrawer(); };
+  document.body.appendChild(mask);
+
+  var dr = document.createElement("div"); dr.id = "tododrawer";
+  dr.innerHTML =
+    '<div class="th"><b>待办 · 官网公告</b><span class="sp"></span>' +
+    '<button onclick="loadTodoDrawer(true);loadQqDigest(true)">刷新</button>' +
+    '<button onclick="closeTodoDrawer()">关闭</button></div>' +
+    '<div class="ttabs">' +
+      '<button id="tab-ann" class="on" onclick="szSwitchTab(0)">公告与待办</button>' +
+      '<button id="tab-qq" onclick="szSwitchTab(1)">班群摘要</button>' +
+    '</div>' +
+    '<div class="body" id="todobody"><div class="empty">载入中…</div></div>' +
+    '<div class="body" id="qqdigest" style="display:none"><div class="empty">载入中…</div></div>' +
+    '<div class="foot" id="todofoot"></div>';
+  document.body.appendChild(dr);
+
+  // 顶部按钮（插在 header 末尾）
+  var hdr = document.querySelector("#main header");
+  if(hdr){
+    var b = document.createElement("button");
+    b.className = "iconbtn"; b.title = "待办与官网公告";
+    b.innerHTML = '待办<span id="todocnt"></span>';
+    b.onclick = function(){ toggleTodoDrawer(); };
+    hdr.appendChild(b);
+  }
+
+  window.toggleTodoDrawer = function(){
+    var open = dr.classList.toggle("open");
+    mask.classList.toggle("open", open);
+    if(open) loadTodoDrawer();
+  };
+  window.closeTodoDrawer = function(){
+    dr.classList.remove("open"); mask.classList.remove("open");
+  };
+
+  /* ============ 班群摘要（2026-10-03）============
+     数据来自 data/qq_digest.json：腾讯云云函数验签+脱敏+提纯后写入，
+     或本机 pull_qq.py 生成。只放有信息量的通知类内容，不含姓名/学号/手机号。
+     URL 带时间戳 + no-store，绕开 GitHub Pages 的 10 分钟 CDN 缓存。 */
+  var qqDigestCache = null;
+  function renderQqDigest(j, err){
+    var box = document.getElementById("qqdigest");
+    if(!box) return;
+    if(err){
+      box.innerHTML = '<div class="empty">暂时读不到班群摘要（' + esc(err) + '）<br>这不影响公告查看。</div>';
+      return;
+    }
+    if(!j || !j.items || !j.items.length){
+      box.innerHTML = '<div class="empty">还没有收集到有信息量的班群消息<br>' +
+        '<span style="font-size:12px;opacity:.7">通知 / 截止 / 讲座 / 考试这类会上这里，闲聊不收</span></div>';
+      return;
+    }
+    var h = '<div style="font-size:12px;opacity:.72;margin:0 0 8px">' + esc(j.note || "") +
+      '<br>更新于 ' + esc(j.updated_text || "") + '　共 ' + j.items.length + ' 条</div>' +
+      '<ul style="list-style:none;margin:0;padding:0">';
+    for(var i=0;i<j.items.length;i++){
+      var it = j.items[i];
+      h += '<li style="border-left:3px solid #3b82f6;padding:7px 10px;margin:0 0 8px;' +
+        'border-radius:0 6px 6px 0;background:rgba(59,130,246,.06)">' +
+        '<div style="font-size:12px;opacity:.7;margin-bottom:2px">' + esc(it.timeText || it.time || "") + '</div>' +
+        '<div style="line-height:1.65">' + esc(it.text) + '</div></li>';
+    }
+    box.innerHTML = h + '</ul>';
+  }
+  window.loadQqDigest = function(force){
+    if(qqDigestCache && !force) return Promise.resolve(qqDigestCache);
+    return fetch("data/qq_digest.json?t=" + Date.now(), {cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(j){ qqDigestCache = j; renderQqDigest(j); return j; })
+      .catch(function(e){ renderQqDigest(null, (e && e.message) || String(e)); });
+  };
+  window.szSwitchTab = function(n){
+    var a = document.getElementById("todobody"), b = document.getElementById("qqdigest");
+    var ta = document.getElementById("tab-ann"), tb = document.getElementById("tab-qq");
+    if(!a || !b) return;
+    if(n === 1){
+      a.style.display = "none"; b.style.display = "block";
+      if(ta) ta.className = ""; if(tb) tb.className = "on";
+      window.loadQqDigest();
+    } else {
+      a.style.display = "block"; b.style.display = "none";
+      if(ta) ta.className = "on"; if(tb) tb.className = "";
+    }
+  };
+
+  var cache = null;
+  window.loadTodoDrawer = function(force){
+    var body = document.getElementById("todobody");
+    var foot = document.getElementById("todofoot");
+    if(cache && !force){ renderTodo(cache); return; }
+    body.innerHTML = '<div class="empty">载入中…</div>';
+    fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(d){ cache = d; renderTodo(d); })
+      .catch(function(e){
+        body.innerHTML = '<div class="empty">读不到待办数据。<br><br>' +
+          '<span style="font-size:12px">本机 bridge 每次同步会生成 data/todo.json。<br>' +
+          '确认已跑过 <code>python bridge.py sync</code>。<br>(' + (e.message||e) + ')</span></div>';
+        foot.textContent = "";
+      });
+  };
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function fmt(ts){ if(!ts) return ""; try{
+    return new Date(ts*1000).toLocaleDateString("zh-CN"); }catch(e){ return ""; } }
+
+  function renderTodo(d){
+    var body = document.getElementById("todobody");
+    var foot = document.getElementById("todofoot");
+    var cn = document.getElementById("todocnt");
+    var items = (d && d.items) || [];
+    if(cn) cn.textContent = items.length ? " " + items.length : "";
+    if(!items.length){
+      body.innerHTML = '<div class="empty">今天没有待办。</div>';
+      foot.textContent = (d && d.updated_at) ? "更新于 " + d.updated_at : "";
+      return;
+    }
+    var LV = ["P0","P1","P2","P3"], NM = {P0:"紧急",P1:"重要",P2:"一般",P3:"低"};
+    var html = "", n = 0;
+    LV.forEach(function(lv){
+      var g = items.filter(function(x){ return x.level === lv; });
+      if(!g.length) return;
+      html += '<div class="grp">' + lv + " · " + NM[lv] + "（" + g.length + "）</div>";
+      g.forEach(function(x){
+        n++;
+        /* 2026-10-03：标题做成可点击直达官网原文。
+           ⚠️ 只信任 http(s) 开头的地址，挡掉 javascript: 之类的注入；
+              rel="noopener noreferrer" 防止新页面拿到本页句柄。 */
+        var u = (typeof x.url === "string" && /^https?:\/\//i.test(x.url)) ? x.url : "";
+        var titleHtml = u
+          ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" ' +
+            'style="color:inherit;text-decoration:none;border-bottom:1px dashed currentColor">' +
+            esc(x.title) + ' <span style="opacity:.55;font-size:11px">↗</span></a>'
+          : esc(x.title);
+        html += '<div class="it ' + lv + '"><div class="t">' + titleHtml + "</div>" +
+          '<div class="m">' +
+            (x.ddl ? "<span>截止 " + esc(x.ddl) + "</span>" : "") +
+            "<span>来自 " + esc(x.src) + "</span>" +
+            (x.ts ? "<span>" + fmt(x.ts) + "</span>" : "") +
+            (u ? '<span style="opacity:.6">可点标题直达原文</span>' : "") +
+          "</div></div>";
+      });
+    });
+    body.innerHTML = html;
+    foot.textContent = "共 " + n + " 条" +
+      (d.updated_at ? " ｜ 更新于 " + d.updated_at : "") +
+      (d.note ? " ｜ " + d.note : "");
+  }
+
+  // 启动后顺手取一次数量
+  setTimeout(function(){
+    fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        cache = d;
+        var cn = document.getElementById("todocnt");
+        if(cn && d && d.items) cn.textContent = " " + d.items.length;
+      }).catch(function(){});
+  }, 1200);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//shezhang2//bridge//CN
+CALSCALE:GREGORIAN
+X-WR-CALNAME:蛇杖二号 · 待办
+BEGIN:VEVENT
+UID:shezhang2-131@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261101
+DTEND;VALUE=DATE:20261102
+SUMMARY:[P2] 2026年第六届广西高校大学生翻译大赛和第四届广西高校大学生“讲好广西故事”译写…
+DESCRIPTION:来源：学校通知公告\n原文：https://www.gxmu.edu.cn/xwgk/wwtz/t239484.html\n依据：🏆 比赛/竞赛类（大赛）→ 置顶；识别到截止日 2026-11-01；命中一般事务词：通知/报名/核对；命中画像词：本科/本科生/竞赛
+URL:https://www.gxmu.edu.cn/xwgk/wwtz/t239484.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-7@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261101
+DTEND;VALUE=DATE:20261102
+SUMMARY:[P2] 2026年第六届广西高校大学生翻译大赛和第四届广西高校大学生“讲好广西故事”译写…
+DESCRIPTION:来源：学校通知公告\n原文：https://www.gxmu.edu.cn/xwgk/wwtz/t239484.html\n依据：🏆 比赛/竞赛类（大赛）→ 置顶；识别到截止日 2026-11-01；命中一般事务词：通知/报名/核对；命中画像词：本科/本科生/竞赛
+URL:https://www.gxmu.edu.cn/xwgk/wwtz/t239484.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-199@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261008
+DTEND;VALUE=DATE:20261009
+SUMMARY:[P2] 关于2026—2027学年上学期校内任选课的选课通知 广西医科大学-教务处 返回…
+DESCRIPTION:来源：教务处通知\n原文：https://jwc.gxmu.edu.cn/jwxx/jwtz/t240064.html\n依据：识别到截止日 2026-10-08；命中一般事务词：通知/报名/选课；命中画像词：本科/本科生/选课
+URL:https://jwc.gxmu.edu.cn/jwxx/jwtz/t240064.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-203@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261212
+DTEND;VALUE=DATE:20261213
+SUMMARY:[P2] 关于做好2026年下半年全国大学英语四、六级考试和高校英语应用能力B级考试报名工…
+DESCRIPTION:来源：教务处通知\n原文：https://jwc.gxmu.edu.cn/jwxx/jwtz/t239257.html\n依据：识别到截止日 2026-12-12；命中一般事务词：通知/报名/表；命中画像词：四级/六级/创新创业
+URL:https://jwc.gxmu.edu.cn/jwxx/jwtz/t239257.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-135@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261212
+DTEND;VALUE=DATE:20261213
+SUMMARY:[P2] 关于做好2026年下半年全国大学英语四、六级考试和高校英语应用能力B级考试报名工…
+DESCRIPTION:来源：学校通知公告\n原文：https://www.gxmu.edu.cn/xwgk/wwtz/t239250.html\n依据：识别到截止日 2026-12-12；命中一般事务词：通知/报名；命中画像词：四级/六级/教务
+URL:https://www.gxmu.edu.cn/xwgk/wwtz/t239250.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-11@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20261212
+DTEND;VALUE=DATE:20261213
+SUMMARY:[P2] 关于做好2026年下半年全国大学英语四、六级考试和高校英语应用能力B级考试报名工…
+DESCRIPTION:来源：学校通知公告\n原文：https://www.gxmu.edu.cn/xwgk/wwtz/t239250.html\n依据：识别到截止日 2026-12-12；命中一般事务词：通知/报名；命中画像词：四级/六级/教务
+URL:https://www.gxmu.edu.cn/xwgk/wwtz/t239250.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-200@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20260928
+DTEND;VALUE=DATE:20260929
+SUMMARY:[P3] 关于广西医科大学2026年本科生转专业名单的公示 广西医科大学-教务处 返回校园…
+DESCRIPTION:来源：教务处通知\n原文：https://jwc.gxmu.edu.cn/jwxx/jwtz/t240014.html\n依据：识别到截止日 2026-09-28；命中一般事务词：通知/表/学籍；截止日已过 2 天，降级；命中画像词：本科/本科生/普通话
+URL:https://jwc.gxmu.edu.cn/jwxx/jwtz/t240014.html
+END:VEVENT
+BEGIN:VEVENT
+UID:shezhang2-79@local
+DTSTAMP:20260930T034627Z
+DTSTART;VALUE=DATE:20260928
+DTEND;VALUE=DATE:20260929
+SUMMARY:[P3] 关于广西医科大学2026年本科生转专业名单的公示
+DESCRIPTION:来源：教务处通知\n原文：https://jwc.gxmu.edu.cn/jwxx/jwtz/t240014.html\n依据：识别到截止日 2026-09-28；命中一般事务词：通知/表/学籍；截止日已过 2 天，降级；命中画像词：本科/本科生/普通话
+URL:https://jwc.gxmu.edu.cn/jwxx/jwtz/t240014.html
+END:VEVENT
+END:VCALENDAR
