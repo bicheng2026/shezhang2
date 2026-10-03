@@ -4,6 +4,8 @@
 //   node deploy.mjs --down   整页停用：全网刷新后即见「本站已停用」，可恢复，不伤文库
 //   node deploy.mjs --up     恢复上线（取消停用）
 //   node deploy.mjs --all    部署 index.html + data/index.json + .nojekyll
+//   node deploy.mjs 文件1 文件2 …   按文件名精确部署（新增 JS/静态资源时用这个）
+//      例：node deploy.mjs agent.js sw.js version.json index.html
 // 说明：走 GitHub Contents API 直传，不依赖 git（规避本网络 TLS 不稳）。
 //       文库 lib/ 体量大（百 MB 级），首次与批量更新请用 git push，见 README。
 import { readFileSync, existsSync } from "fs";
@@ -79,6 +81,14 @@ async function deployOne(f, rawOverride) {
       disabled: false, message: "", updated: new Date().toISOString().slice(0, 10)
     }, null, 2));
     console.log("→ 完成：全网用户刷新即恢复访问。");
+    return;
+  }
+  // 精确文件列表：node deploy.mjs agent.js sw.js version.json …
+  const args = process.argv.slice(2);
+  if(args.length && !args[0].startsWith("--")){
+    console.log("→ 精确部署 " + args.length + " 个文件…");
+    for(const f of args) await deployOne(f);
+    console.log("→ 完成：GitHub Pages 通常 1 分钟内重建，用户 Ctrl+F5 刷新即见最新。");
     return;
   }
   const list = ARG === "--all" ? ["index.html", "data/index.json", ".nojekyll"] : ["index.html"];
