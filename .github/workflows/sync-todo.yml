@@ -1,0 +1,56 @@
+name: 同步官网公告待办（从蛇杖一号）
+
+# ⚠️ 隐私红线 2026-10-04
+#   本链路原本还要同步 data/qq_digest.json（班群消息摘要）进这个公开仓库。
+#   主公 2026-09-30 立下的红线：「群聊内容（QQ群/班级群）只落本机，绝不推进任何公开仓库。」
+#   那份文件已全网可读多日，2026-10-04 从远端删除（commit 9e2b079）。
+#   现在本 workflow 只碰 data/todo.json（官网/图书馆公告，纯公开信息）。
+#   另外每次运行起手都有一步「红线自检」，万一有人手滑把 qq_* 推进来，也会被立刻清除。
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"      # 每 30 分钟（GitHub 可能延迟几分钟，属正常）
+  workflow_dispatch:            # 也支持手动点一次
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-todo
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 红线自检：班群内容不得存在于公开仓库，发现即删且把删除一并提交
+      - name: 隐私红线自检
+        run: |
+          echo "检查是否混入了班群内容文件…"
+          for f in data/qq_digest.json data/qq_feed.json; do
+            if [ -f "$f" ]; then
+              echo "⚠️ 发现 $f —— 按隐私红线删除（群聊内容只落本机）"
+              git rm --cached "$f" --ignore-unmatch
+              rm -f "$f"
+            fi
+          done
+          echo "自检通过：无班群内容文件"
+
+      - name: 从蛇杖一号拉取官网公告
+        run: python3 .github/scripts/sync_qq.py
+
+      - name: 有变化才提交
+        run: |
+          git config user.name  "bicheng2026"
+          git config user.email "bicheng2026@163.com"
+          # 只 add 官网公告这一个文件，绝不用通配符 / git add -A
+          git add data/todo.json
+          if git diff --cached --quiet; then
+            echo "无变化，跳过提交"
+          else
+            git commit -m "sync: 同步官网公告待办 $(date -u '+%Y-%m-%d %H:%M UTC')"
+            git push
+            echo "已提交并推送"
+          fi
