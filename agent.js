@@ -100,9 +100,10 @@ const TOOL_SCHEMA = [
     type:"function",
     function:{
       name:"get_todo",
-      description:"读取公开的待办与公告清单（来自学校与图书馆官网，不含任何班群消息）。问「最近有什么通知」「有什么待办」「什么时候截止」时用它。",
+      description:"读取待办与公告清单（学校官网、图书馆官网的正式通知，共百余条，每条含标题、截止日期、来源、原文链接；不含任何班群消息）。凡是问「有什么通知」「最近有什么待办」「什么时候截止」「XX 报名到几号」「申报/评选/讲座/考试/奖学金/实习怎么安排」这类事务性、带时间点的问题，第一优先调用它。不传 kw 就返回全部（有截止日的排在最前）。",
       parameters:{ type:"object", properties:{
-        kw:{type:"string", description:"可选，按关键词过滤"}
+        kw:{type:"string", description:"可选。关键词过滤，如「奖学金」「四六级」「申报」「图书馆」。留空则返回全部。"},
+        topk:{type:"integer", description:"返回条数，默认 20，上限 30"}
       }}
     }
   },
@@ -137,14 +138,17 @@ const TOOLS_PROMPT = [
 "  1）问题涉及教材原文、知识点、章节内容 —— 先 search_library 找，再 read_chapter 取正文，不要凭记忆直接答。",
 "  2）问题里出现了具体书名（如「中医学第10版」「系统解剖学」）—— 用 locate_doc 定位到具体章节。",
 "  3）只知道书名、不知道在第几章 —— 用 read_doc_head 看册的开头（目录/绪论），再决定读哪章。",
-"  4）问的是时效性内容（考试范围公告、选课通知、活动安排、截止日期）—— 用 get_todo 或 net_search。",
+"  4）问到通知、待办、截止日期、报名/申报/评选/讲座/考试时间这类事务性内容 —— 第一优先调 get_todo，",
+"     它给的是学校官网清单，带截止日和原文链接；get_todo 没命中再考虑 net_search。",
+"     典型触发：「最近有什么通知」「有什么待办」「XX 什么时候截止」「XX 报名到几号」「申报开始了没」。",
 "  5）用户提到了自己上传的附件 —— 用 read_attach。",
 "  6）第一轮检索结果不够、或明显跑偏 —— 换关键词再查一轮，别急着答。",
 "",
 "怎么引用：",
-"  · read_chapter 返回的原文编号〔n〕，net_search 返回的编号〔网n〕。",
+"  · read_chapter 返回的原文编号〔n〕，net_search 返回的编号〔网n〕，get_todo 返回的编号〔待办n〕。",
 "  · 你引用的每一处，都必须真的来自工具返回的内容。工具没返回的，不许编。",
 "  · read_chapter 的参数 i 只能用工具返回给你的序号，不要自己编造。",
+"  · 说到某条待办时，必须带上它的截止日期（ddl 字段），有原文链接就把链接给用户。",
 "",
 "查不到怎么办：",
 "  · 工具返回为空或明显不相关时，如实说「我查了 XX，没找到」，然后凭准确的医学基础知识作答，",
@@ -167,6 +171,23 @@ const TOOLS_PROMPT = [
    ================================================================== */
 let HITS = [];        // [{d, i, ti}]，i=-1 表示只命中了册
 let _n = 0;
+
+/* —— 用量账本：主公问「每次大概多少 token」，这里记账 ——
+   prompt / completion 取模型返回的 usage 累加；没有 usage 时用字数粗估，
+   粗估值单独放 est 字段，不与真实值混在一起。 */
+const _blankUsage = () => ({
+  rounds:0, llmCalls:0, toolCalls:0, toolChars:0,
+  prompt:0, completion:0, cached:0,
+  hasUsage:false, est:0
+});
+let USAGE = _blankUsage();
+function _accUsage(u){
+  if(!u) return;
+  USAGE.hasUsage = true;
+  USAGE.prompt     += Number(u.prompt_tokens     || 0);
+  USAGE.completion += Number(u.completion_tokens || 0);
+  USAGE.cached     += Number(u.prompt_cache_hit_tokens || 0);
+}
 
 function pushHit(d, i, ti){
   HITS.push({d, i, ti});
@@ -330,28 +351,53 @@ const HANDLERS = {
   async get_todo(a){
     try{
       const r = await fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"});
-      if(!r.ok) return {ok:false, msg:"待办读取失败 HTTP " + r.status};
+      if(!r.ok) return {ok:false, msg:"待办读取失败 HTTP " + r.status +
+        "（确认 data/todo.json 已随站点放上去）"};
       const j = await r.json();
       /* 隐私双保险：这份 json 若哪天 include_qq 变 true，直接拒绝返回 */
       if(j && j.include_qq)
         return {ok:false, msg:"该数据源含班群内容，按隐私红线不予读取。"};
       let items = (j && j.items) || [];
       const kw = String((a && a.kw) || "").trim();
-      if(kw) items = items.filter(x=>String(x.title||"").includes(kw) || String(x.src||"").includes(kw));
-      items = items.slice(0, CFG.TODO_MAX);
+      if(kw){
+        /* 空格 / 逗号分词，任一词命中即可；同时比标题、来源、打标理由 */
+        const toks = kw.split(/[\s,，、]+/).filter(Boolean);
+        items = items.filter(x=>{
+          const s = String(x.title||"") + String(x.src||"") + String(x.reason||"");
+          return toks.some(t=>s.includes(t));
+        });
+      }
+      /* 有截止日的排前面并按日期升序 —— 问「什么时候截止」时最关心的就是这些 */
+      items = items.slice().sort((p,q)=>{
+        const pd = String(p.ddl||""), qd = String(q.ddl||"");
+        if(pd && qd) return pd < qd ? -1 : (pd > qd ? 1 : 0);
+        if(pd) return -1;
+        if(qd) return 1;
+        return 0;
+      });
+      const total = items.length;
+      const topk = Math.min(Math.max(parseInt(a && a.topk, 10) || 20, 1), CFG.TODO_MAX);
+      items = items.slice(0, topk);
       const out = items.map((x,n)=>({
         n:n+1,
         level:x.level || "",
         title:clip(x.title || "", CFG.TODO_CLIP),
         ddl:x.ddl || "",
-        src:x.src || ""
+        src:x.src || "",
+        url:x.url || ""
       }));
       const s = JSON.stringify(out);
       if(/qq|班群|群消息/i.test(s))
         return {ok:false, msg:"返回内容触发隐私闸门，已拦截。"};
-      return {ok:true, count:out.length, items:out,
+      if(!out.length)
+        return {ok:true, count:0, matched:0,
+                msg: kw ? ("没有命中「" + kw + "」的待办。可以不带 kw 再取一次看全部，或换个更短的词。")
+                        : "待办清单为空。"};
+      return {ok:true, count:out.length, matched:total, items:out,
               updated:(j && j.updated_at) || "",
-              tip:"这是公开的公告与待办清单。引用时标〔待办n〕。含班群消息的数据源不在此列，也拿不到。"};
+              tip:"这是学校/图书馆官网的公开公告与待办清单，共命中 " + total +
+                  " 条，上面返回前 " + out.length + " 条（有截止日的排最前）。引用时标〔待办n〕；" +
+                  "需要给用户原文出处就用 url 字段。含班群消息的数据源不在此列，也拿不到。"};
     }catch(e){ return {ok:false, msg:"待办读取失败：" + e.message}; }
   },
 
@@ -414,6 +460,19 @@ function httpPost(base, key, payload){
   });
 }
 
+/* 带 usage 的 POST：先试 stream_options（能换来真实 token 数）。
+   端点不认这个字段会回 400，此时原样退回重发一次，不影响主流程。 */
+async function httpPostUsage(base, key, basePayload){
+  let r = await httpPost(base, key, Object.assign({stream_options:{include_usage:true}}, basePayload));
+  if(r.ok) return r;
+  const t = await r.text().catch(()=> "");
+  if(r.status === 400 && /stream_options|include_usage/i.test(t)){
+    return httpPost(base, key, basePayload);      /* 退一档再来 */
+  }
+  /* 真失败：把已读出的错误正文包回去，让上层照常抛错 */
+  return { ok:false, status:r.status, body:null, text: async ()=>t };
+}
+
 /* 流式一轮：累积 content / reasoning_content / tool_calls（SSE 里 tool_calls 是增量片段，必须按 index 拼） */
 async function streamOnce(opt, msgs, onDelta){
   const payload = Object.assign(bodyBase(opt.mdl, opt.think), {
@@ -422,15 +481,16 @@ async function streamOnce(opt, msgs, onDelta){
     tools: TOOL_SCHEMA,
     tool_choice: "auto"
   });
-  const r = await httpPost(opt.cfg.base, opt.cfg.key, payload);
+  const r = await httpPostUsage(opt.cfg.base, opt.cfg.key, payload);
   if(!r.ok){
     const t = await r.text().catch(()=> "");
     throw new Error("HTTP " + r.status + " " + t.slice(0, 200));
   }
   const rd = r.body.getReader(), dec = new TextDecoder();
-  let content = "", reasoning = "";
+  let content = "", reasoning = "", lastU = null;
   const tcMap = {};                    // index -> 增量拼装槽
   let sawTool = false;
+  USAGE.llmCalls++;
 
   while(true){
     const {done, value} = await rd.read();
@@ -441,6 +501,7 @@ async function streamOnce(opt, msgs, onDelta){
       if(!js || js === "[DONE]") continue;
       let d;
       try{ d = JSON.parse(js); }catch(e){ continue; }
+      if(d.usage) lastU = d.usage;      /* usage 只在最后一个 chunk 里来，取最后一次即可 */
       const ch = d.choices && d.choices[0];
       if(!ch) continue;
       const dl = ch.delta || {};
@@ -469,6 +530,8 @@ async function streamOnce(opt, msgs, onDelta){
   }
   /* content 去掉装饰符（与直线流程保持一致的输出洁癖） */
   content = String(content).replace(/[✳◆▍#]+/g, "");
+  _accUsage(lastU);
+  USAGE.est += Math.ceil((content.length + String(reasoning).length) / 1.6);
   return { role:"assistant", content: content || null,
            ...(reasoning ? {reasoning_content: reasoning} : {}),
            ...(tool_calls && tool_calls.length ? {tool_calls} : {}) };
@@ -481,13 +544,14 @@ async function finishOnce(opt, msgs, onDelta){
     stream: true
     /* 故意不传 tools —— 让它没得选，只能给文本 */
   });
-  const r = await httpPost(opt.cfg.base, opt.cfg.key, payload);
+  const r = await httpPostUsage(opt.cfg.base, opt.cfg.key, payload);
   if(!r.ok){
     const t = await r.text().catch(()=> "");
     throw new Error("HTTP " + r.status + " " + t.slice(0, 160));
   }
   const rd = r.body.getReader(), dec = new TextDecoder();
-  let content = "", reasoning = "";
+  let content = "", reasoning = "", lastU = null;
+  USAGE.llmCalls++;
   while(true){
     const {done, value} = await rd.read();
     if(done) break;
@@ -496,11 +560,14 @@ async function finishOnce(opt, msgs, onDelta){
       const js = line.slice(5).trim();
       if(!js || js === "[DONE]") continue;
       let d; try{ d = JSON.parse(js); }catch(e){ continue; }
+      if(d.usage) lastU = d.usage;
       const dl = (d.choices && d.choices[0] && d.choices[0].delta) || {};
       if(dl.reasoning_content){ reasoning += dl.reasoning_content; if(onDelta) onDelta(null, dl.reasoning_content); }
       if(dl.content){ content += dl.content; if(onDelta) onDelta(dl.content, null); }
     }
   }
+  _accUsage(lastU);
+  USAGE.est += Math.ceil((String(content).length + String(reasoning).length) / 1.6);
   return String(content).replace(/[✳◆▍#]+/g, "");
 }
 
@@ -525,36 +592,94 @@ function sanitizeFinal(s){
 }
 
 /* ==================================================================
-   8. 轨迹渲染：一个气泡走天下，不刷屏
+   8. 轨迹渲染 —— 一个气泡走天下，且必须排在答案气泡【之前】
+      ------------------------------------------------------------------
+      主公要求：工具调用不要写在回答下面，要像「深度思考」/ WorkBuddy 那样，
+      先看它在干什么，再看它答什么。
+      addMsg() 是往聊天区尾部 append，而答案气泡 b 已经先建好了，
+      所以纯 append 必然落在答案下面。这里补一步「上提」：
+      每次刷新都把轨迹行 insertBefore 到答案气泡所在行之前。
+      _anchor 就是 index.html 传进来的 bub（答案气泡）。
    ================================================================== */
-let _tb = null;
-function traceReset(){ _tb = null; }
+let _tb = null, _tbRow = null, _tbLines = [], _anchor = null;
+const _hEsc = s => String(s == null ? "" : s)
+  .replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function traceReset(anchor){
+  _tb = null; _tbRow = null; _tbLines = [];
+  _anchor = anchor || null;
+}
+
+/* 重新画一遍（也要写回 _rec.html，否则切会话重绘会丢） */
+function _paintTrace(){
+  if(!_tb) return;
+  const html = _tbLines.map(_hEsc).join("<br>");
+  _tb.innerHTML = html;
+  if(_tb._rec) _tb._rec.html = html;
+}
+/* 上提到答案之前 */
+function _hoist(){
+  try{
+    const chat = document.getElementById("chat");
+    const aRow = _anchor && _anchor.parentElement;
+    if(chat && _tbRow && aRow && _tbRow.parentElement === chat
+       && _tbRow.nextElementSibling !== aRow){
+      chat.insertBefore(_tbRow, aRow);
+    }
+  }catch(e){ /* 挪不动就算了，不影响答案 */ }
+}
+
 function trace(name, args, res){
   try{
     if(typeof addMsg !== "function") return;
     const cn = TOOL_CN[name] || name;
     const argTxt = (args && Object.keys(args).length)
-      ? Object.keys(args).map(k=>k + "=" + clip(args[k], 24)).join(", ") : "";
-    const line = "🔧 " + cn + (argTxt ? "（" + argTxt + "）" : "");
+      ? Object.keys(args).map(k => k + "=" + clip(args[k], 24)).join(", ") : "";
     const brief = (()=>{
       const r = res || {};
       if(r.ok === false) return "　→ 失败：" + String(r.msg || "").slice(0, 90);
       if(Array.isArray(r.hits) && r.hits.length)
         return "　→ 命中 " + r.hits.length + " 项：" + r.hits.slice(0,3)
-                 .map(h=>"[" + h.i + "] " + clip(h.book,16) + (h.chapter ? " · " + clip(h.chapter,20) : "")).join("；");
+                 .map(h => "[" + h.i + "] " + clip(h.book,16) + (h.chapter ? " · " + clip(h.chapter,20) : "")).join("；");
       if(Array.isArray(r.items) && r.items.length)
-        return "　→ 返回 " + r.items.length + " 条";
+        return "　→ 返回 " + r.items.length + " 条" +
+               (r.items[0] && r.items[0].title ? "：" + clip(r.items[0].title, 26) : "");
       if(r.text) return "　→ 取回正文约 " + String(r.text).length + " 字";
       if(r.msg)  return "　→ " + String(r.msg).slice(0, 90);
       return "　→ ok";
     })();
+    _tbLines.push("🔧 " + cn + (argTxt ? "（" + argTxt + "）" : ""), brief);
+
     if(!_tb){
-      _tb = addMsg("🔧 工具调用", line + "\n" + brief, "tool");
-    } else {
-      _tb.innerHTML = String(_tb.innerHTML).replace(/<br\s*\/?>/g, "\n") + "\n" + line + "\n" + brief;
-      const c = document.getElementById("chat"); if(c) c.scrollTop = c.scrollHeight;
+      _tb = addMsg("🔧 工具调用", "", "tool");
+      _tbRow = _tb && _tb.parentElement;
+      /* 也做成可折叠，跟深度思考一个用法 */
+      try{
+        const w = _tbRow && _tbRow.querySelector(".who");
+        if(w){ w.style.cursor = "pointer";
+               w.title = "点击折叠 / 展开";
+               w.onclick = ()=>{ const bub = _tbRow.querySelector(".bubble");
+                                 bub.style.display = bub.style.display === "none" ? "block" : "none"; }; }
+      }catch(e){}
     }
+    _paintTrace();
+    _hoist();
+    const c = document.getElementById("chat"); if(c) c.scrollTop = c.scrollHeight;
   }catch(e){ /* 轨迹渲染失败不影响主流程 */ }
+}
+
+/* 收尾：写上「共几轮 / 几次工具 / 多少 tokens」，并把标题标成已结束 */
+function traceFinish(summary){
+  try{
+    if(!_tb || !_tbLines.length) return;
+    if(summary) _tbLines.push("", summary);
+    _paintTrace();
+    try{
+      const w = _tbRow && _tbRow.querySelector(".who");
+      if(w) w.textContent = "🔧 工具调用（已结束，点击折叠）";
+    }catch(e){}
+    _hoist();
+  }catch(e){}
 }
 
 /* 上下文裁剪：只砍最老的 tool 消息，保住 system 与用户提问 */
@@ -579,7 +704,9 @@ function trimCtx(msgs, limit){
 async function runLoop(opt){
   if(!opt || !opt.cfg || !opt.cfg.key) throw new Error("runLoop: 缺少端点配置");
 
-  HITS = []; traceReset();                       // 每次新问重置命中表与轨迹
+  HITS = [];
+  USAGE = _blankUsage();               // 每次新问重置账本
+  traceReset(opt.bub);                 // 轨迹气泡锚在答案气泡之前（主公要求：先见过程，再见答案）
 
   const sys  = String(opt.sysBase || "") + TOOLS_PROMPT
              + (MODE_PROMPT && MODE_PROMPT[opt.mode] ? "\n\n" + MODE_PROMPT[opt.mode] : "");
@@ -652,9 +779,12 @@ async function runLoop(opt){
       }catch(e){ res = {ok:false, msg:"执行异常：" + (e && e.message || e)}; }
 
       trace(fn, args, res);
-      msgs.push({ role:"tool", tool_call_id:call.id, name:fn,
-                  content: clip(guard(res), CFG.CLIP) });
+      USAGE.toolCalls++;
+      const _c = clip(guard(res), CFG.CLIP);
+      USAGE.toolChars += String(_c).length;
+      msgs.push({ role:"tool", tool_call_id:call.id, name:fn, content: _c });
     }
+    USAGE.rounds = turn;
     trimCtx(msgs, CFG.CTX_LIMIT);
   }
 
@@ -670,6 +800,17 @@ async function runLoop(opt){
   }
 
   final = sanitizeFinal(final);
+
+  /* 收尾：把「几轮 / 几次工具 / 命中多少 / 多少 token」写在轨迹气泡末尾，主公开销一眼可见 */
+  traceFinish((function(){
+    const u = USAGE;
+    const tk = u.hasUsage
+      ? "tokens 入 " + u.prompt + " / 出 " + u.completion +
+        (u.cached ? "（缓存命中 " + u.cached + "）" : "")
+      : "tokens 约 " + u.est + "（粗估，接口未回 usage）";
+    return "—— 共 " + u.rounds + " 轮 · " + u.toolCalls + " 次工具 · 命中 " +
+           HITS.length + " 项 · " + tk;
+  })());
 
   if(!final){
     /* 仍然没拿到能看的文本 → 交还控制权，由 ask() 走原直线 RAG 兜底 */
@@ -706,7 +847,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent1",
+  v:"v2-agent2",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
   runLoop,
   selfTest,
   CFG,
@@ -715,7 +856,8 @@ window.AGENT = {
   TOOLS_PROMPT,
   failed:false,                     /* 一旦崩过就置 true，由 ask() 降级用 */
   setBusy(v){ try{ busy = !!v; }catch(e){} },   /* busy 是 index.html 的顶层 let，只能从这边改 */
-  _state(){ return {hits:HITS.length, failed:window.AGENT.failed}; }
+  usage(){ return Object.assign({}, USAGE); },  /* 本轮用量：轮次 / 工具次数 / token */
+  _state(){ return {hits:HITS.length, failed:window.AGENT.failed, usage:USAGE}; }
 };
 
 })();
