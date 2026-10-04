@@ -2,7 +2,11 @@
    策略：只缓存「应用外壳」（页面 + 图标），文库密文与索引一律走网络。
    —— 文库 105 MB 且是密文，缓存下来既占手机空间又没意义；壳缓存好就能离线打开界面。 */
 
-const CACHE = "sz2-shell-v2";
+/* v3：index.html 换了引用 agent.js 的版本号，外壳必须抬级，
+   否则同学端吃到的还是缓存里的旧 index.html（那份引用的是不带版本号的旧内核）。
+   注：agent.js 故意【不】进 SHELL —— 它靠 ?v= 版本号破 CDN 缓存，
+      这样每次只改一个版本号就能让全网拿到新内核，不必动 sw.js。 */
+const CACHE = "sz2-shell-v3";
 const SHELL = [
   "./", "./index.html", "./manifest.json",
   "./icon-192.png", "./icon-512.png", "./icon-180.png", "./icon-32.png"
