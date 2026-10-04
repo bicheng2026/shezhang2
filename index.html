@@ -2826,10 +2826,17 @@ const _CAT_ORDER = ["① 教材","② 课件题库","③ 学科资料","④ 待�
 let _docsAll = [];
 function buildSidebar(){
   if(!DOCS || !DOCS.length) return;
-  _docsAll = DOCS.slice();
+  /* 侧边栏按原定口径**只列教材**（2026-10-04 修回）。
+     此前这里是 DOCS.slice()，把全部 308 册都铺开了 —— 其中只有 51 册是
+     01_教材/，其余 257 册是课件、学科资料（细胞生物学等）、微信图片和
+     「放这里就能入库」这种占位文件，等于把素材堆当成书目列。
+     注意：这里只改「侧栏列什么」，不改检索 —— search_library 仍走全量 DOCS，
+     课件与学科资料照样能被问出来，只是不铺在侧栏里。 */
+  _docsAll = DOCS.filter(d => catOf(d.f) === "① 教材");
+  if(!_docsAll.length) _docsAll = DOCS.slice();   /* 兜底：索引里万一没有教材目录 */
   renderDocList(_docsAll);
   const sf = document.getElementById("sidefoot");
-  if(sf) sf.textContent = DOCS.length + " 部文献 · 离线可用";
+  if(sf) sf.textContent = _docsAll.length + " 部教材 · 离线可用";
 }
 function renderDocList(docs){
   const list = document.getElementById("doclist");
@@ -3183,6 +3190,6 @@ renderNetStat();
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
 <!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
-<script src="agent.js?v=2026.10.04-agent2"></script>
+<script src="agent.js?v=2026.10.04-agent3"></script>
 </body>
 </html>
