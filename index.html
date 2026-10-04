@@ -2297,8 +2297,8 @@ const NET_SRC = [
     desc:"免 Key ·  NIH 官方接口，可直连 · 查英文医学文献题录与摘要（供学习参考）",
     probe:"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=shock&retmode=json&retmax=1" },
   { id:"gxmu", name:"广西医科大学官网（含内网查看）", kind:"gxmu", need:false,
-    desc:"实时抓校网各栏目 · 需在本机运行校园网代理（web/gxmu_proxy.py）；连着校园网时连「内网查看」也能读到。代理没开则自动降级为公开栏目",
-    probe:"http://127.0.0.1:8898/ping" },
+    desc:"实时抓校网各栏目 · 需在本机运行校园网代理（web/gxmu_proxy.py，二号默认 8894）；连着校园网时连「内网查看」也能读到。代理没开则自动降级为公开栏目",
+    probe:"http://127.0.0.1:8894/ping" },
 ];
 
 const escA = s => String(s==null?"":s).replace(/[&<>"']/g,
@@ -2413,17 +2413,63 @@ const NET = {
     });
   },
 
-  /* 校网：本页若就是代理托管的（http://127.0.0.1:8898/）→ 同源直接读；
-     否则（github.io 的 HTTPS 页）尝试跨到本地，但浏览器会因「混合内容」拦下，属预期。 */
-  GXMU_PORT: 8898,
+  /* 校网代理端口。
+     二号默认 8894；做成「允许列表」而不是写死一个端口，是为了两种兜底：
+       ① 用户手滑用 --port 8898 跑起来（一号的老端口），页面照样认得；
+       ② 本机托管页若开在列表里任一端口上，都算同源，直接读，不走跨域。
+     探测结果缓存 10 分钟，不至于每问一句就把端口扫一遍。 */
+  GXMU_PORTS: ["8894", "8898"],
+  GXMU_PORT : "8894",                    /* 保留旧字段名：老代码 / 外部引用不会突然失效 */
+  gxmuPort(){
+    const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+    if(local && this.GXMU_PORTS.indexOf(String(location.port)) >= 0)
+      return String(location.port);      /* 同源：代理本身就在托管这个页面 */
+    let saved = "";
+    try{ saved = localStorage.getItem("sz2_gxmu_port") || ""; }catch(e){}
+    return this.GXMU_PORTS.indexOf(saved) >= 0 ? saved : String(this.GXMU_PORT);
+  },
+  /* 依次试允许列表，把第一个 ping 通的端口记下来 */
+  async detectPort(){
+    const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+    if(local && this.GXMU_PORTS.indexOf(String(location.port)) >= 0){
+      try{ localStorage.setItem("sz2_gxmu_port", String(location.port)); }catch(e){}
+      return String(location.port);
+    }
+    let memo = {};
+    try{ memo = JSON.parse(localStorage.getItem("sz2_gxmu_probe") || "{}") || {}; }catch(e){}
+    const now = Date.now();
+    if(memo.t && now - memo.t < 600000){
+      if(this.GXMU_PORTS.indexOf(memo.p) >= 0) return memo.p;
+      if(memo.p === "none") return String(this.GXMU_PORT);     /* 刚扫过，全不通 */
+    }
+    for(const p of this.GXMU_PORTS){
+      try{
+        const r = await this._t("http://127.0.0.1:" + p + "/ping", 2000);
+        if(r.ok){
+          try{
+            localStorage.setItem("sz2_gxmu_port", p);
+            localStorage.setItem("sz2_gxmu_probe", JSON.stringify({p, t:now}));
+          }catch(e){}
+          return p;
+        }
+      }catch(e){ /* 该端口没开，试下一个 */ }
+    }
+    try{
+      localStorage.setItem("sz2_gxmu_probe", JSON.stringify({p:"none", t:now}));
+      localStorage.removeItem("sz2_gxmu_port");
+    }catch(e){}
+    return String(this.GXMU_PORT);       /* 全不通：退回默认，后面照常降级 */
+  },
   gxmuBase(){
     const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
-    return (local && String(location.port) === String(this.GXMU_PORT))
-      ? ""                                        /* 同源：代理本身就是网站 */
-      : "http://127.0.0.1:" + this.GXMU_PORT;     /* 远端页：跨到本地（多半被拦） */
+    return (local && String(location.port) === this.gxmuPort())
+      ? ""                                              /* 同源：代理本身就是网站 */
+      : "http://127.0.0.1:" + this.gxmuPort();          /* 远端页：跨到本地（多半被拦） */
   },
   async _gxmu(q){
-    const P = this.gxmuBase();
+    const p = await this.detectPort();
+    const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+    const P = (local && String(location.port) === p) ? "" : "http://127.0.0.1:" + p;
     let via = "本机代理";
     try{
       const r = await this._t(P + "/search?q=" + encodeURIComponent(q) + "&n=4", 12000);
@@ -2478,7 +2524,11 @@ const NET = {
           ? {id:s.id, ok:true, ms, note:"检索正常，返回 "+items.length+" 条"}
           : {id:s.id, ok:false, ms, note:"有响应但无结果（Key 可能无效或无额度）"};
       }
-      const pUrl = (s.id === "gxmu") ? (this.gxmuBase() + "/ping") : s.probe;
+      let pUrl = s.probe;
+      if(s.id === "gxmu"){
+        await this.detectPort();          /* 先把端口找准，再探这条通道 */
+        pUrl = this.gxmuBase() + "/ping";
+      }
       const r = await this._t(pUrl, 8000);
       const ms = Math.round(performance.now()-t0);
       if(!r.ok) return {id:s.id, ok:false, ms, note:"HTTP "+r.status};
@@ -3132,6 +3182,7 @@ renderNetStat();
      它引用了 DOCS / search / sliceSec / headSpan / MEM / NET / TOOLS / addMsg / typeInto
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
-<script src="agent.js"></script>
+<!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
+<script src="agent.js?v=2026.10.04-agent2"></script>
 </body>
 </html>
