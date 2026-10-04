@@ -1,5 +1,5 @@
 /* ==================================================================
-   蛇杖二号 · Agent 内核  v2-agent2
+   蛇杖二号 · Agent 内核  v2-agent3
    ------------------------------------------------------------------
    干什么：把「检索权」从 ask() 的硬编码直线里拿回来，交给模型。
            模型自己决定查什么、查几轮；查不到允许它说「没找到」。
@@ -171,6 +171,12 @@ const TOOLS_PROMPT = [
    ================================================================== */
 let HITS = [];        // [{d, i, ti}]，i=-1 表示只命中了册
 let _n = 0;
+
+/* —— 引用登记表（2026-10-04 补）——
+   模型在答案里写的〔n〕〔网n〕〔待办n〕〔附件n〕，此前在 Agent 模式下**没有任何对照**：
+   index.html 的旧来源卡片被 `!_agTake()` 整块跳过，用户只看到角标、不知道指的是哪本书哪条通知。
+   这里把每个工具返回的角标 → 出处 记下来，答案出来后渲染一张可点的对照卡。 */
+let REFS = { book:{}, web:{}, todo:{}, att:{} };
 
 /* —— 用量账本：主公问「每次大概多少 token」，这里记账 ——
    prompt / completion 取模型返回的 usage 累加；没有 usage 时用字数粗估，
@@ -682,6 +688,105 @@ function traceFinish(summary){
   }catch(e){}
 }
 
+/* ==================================================================
+   8b. 引用对照 —— 把工具返回的角标编号收下来，答案后渲染成可查的表
+   ==================================================================
+   编号口径（必须和 TOOLS_PROMPT 对模型讲的一致，否则表对不上角标）：
+     〔n〕      read_chapter 的返回字段 n（= 模型传的 i = HITS 的 1-based 序号）
+     〔网n〕    net_search 返回 items[].n（本轮内 1-based）
+     〔待办n〕  get_todo  返回 items[].n（本轮内 1-based）
+     〔附件n〕  read_attach 返回 items[].n
+   搜索类工具（search_library / locate_doc）也把命中登记进 book，
+   因为模型可能"搜到了就直接引用"而没真的 read_chapter。 */
+function collectRefs(fn, res){
+  try{
+    if(!res || res.ok === false) return;
+    if(fn === "read_chapter" && res.src != null){
+      const n = Number(res.n);
+      if(Number.isInteger(n) && n > 0) REFS.book[n] = { src: String(res.src) };
+    }
+    if(fn === "search_library" || fn === "locate_doc"){
+      for(const h of (res.hits || [])){
+        const n = Number(h.i);
+        if(!Number.isInteger(n) || n < 1) continue;
+        if(!REFS.book[n])
+          REFS.book[n] = { src: String(h.book || "") + (h.chapter ? " · " + String(h.chapter) : "") };
+      }
+    }
+    if(fn === "net_search"){
+      for(const x of (res.items || [])){
+        const n = Number(x.n);
+        if(Number.isInteger(n) && n > 0)
+          REFS.web[n] = { src: String(x.src || ""), title: String(x.title || "") };
+      }
+    }
+    if(fn === "get_todo"){
+      for(const x of (res.items || [])){
+        const n = Number(x.n);
+        if(Number.isInteger(n) && n > 0)
+          REFS.todo[n] = { level:String(x.level||""), title:String(x.title||""),
+                           ddl:String(x.ddl||""), src:String(x.src||""), url:String(x.url||"") };
+      }
+    }
+    if(fn === "read_attach"){
+      for(const x of (res.items || [])){
+        const n = Number(x.n);
+        if(Number.isInteger(n) && n > 0)
+          REFS.att[n] = { name:String(x.name || ""), kind:String(x.kind || "") };
+      }
+    }
+  }catch(e){ /* 登记失败不影响主流程 */ }
+}
+
+const _rEsc = s => String(s == null ? "" : s)
+  .replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const _keysAsc = o => Object.keys(o).map(Number).filter(n => Number.isInteger(n))
+                              .sort((a, b) => a - b);
+
+/* 渲染「引用对照」卡。只列这次答案真正登记过的角标，没用到就不出现。
+   有链接的（待办）做成可点；标题原样保留，只做 HTML 转义。 */
+function renderRefs(){
+  try{
+    if(typeof addMsg !== "function") return;
+    const blocks = [];
+
+    const bk = _keysAsc(REFS.book);
+    if(bk.length)
+      blocks.push('<div style="margin:0 0 2px"><b>教材原文</b></div>' +
+        bk.map(n => '<div style="margin:1px 0">〔' + n + '〕' + _rEsc(REFS.book[n].src) + '</div>').join(""));
+
+    const wb = _keysAsc(REFS.web);
+    if(wb.length)
+      blocks.push('<div style="margin:6px 0 2px"><b>联网参考</b>（公开网络，非教材原文）</div>' +
+        wb.map(n => {
+          const t = REFS.web[n];
+          return '<div style="margin:1px 0">〔网' + n + '〕' + _rEsc(t.src) +
+                 (t.title ? ' · ' + _rEsc(t.title) : '') + '</div>';
+        }).join(""));
+
+    const td = _keysAsc(REFS.todo);
+    if(td.length)
+      blocks.push('<div style="margin:6px 0 2px"><b>待办公告</b></div>' +
+        td.map(n => {
+          const t = REFS.todo[n];
+          const link = t.url
+            ? ' <a href="' + _rEsc(t.url) + '" target="_blank" rel="noopener"' +
+              ' style="color:inherit;border-bottom:1px dashed currentColor;text-decoration:none">原文 ↗</a>'
+            : '';
+          const ddl = t.ddl ? ' · <span style="color:#e88">截止 ' + _rEsc(t.ddl) + '</span>' : '';
+          return '<div style="margin:2px 0">〔待办' + n + '〕' + _rEsc(t.title) + ddl + link + '</div>';
+        }).join(""));
+
+    const at = _keysAsc(REFS.att);
+    if(at.length)
+      blocks.push('<div style="margin:6px 0 2px"><b>你的附件</b></div>' +
+        at.map(n => '<div style="margin:1px 0">〔附件' + n + '〕' + _rEsc(REFS.att[n].name) + '</div>').join(""));
+
+    if(!blocks.length) return;
+    addMsg("📎 引用对照（本条回答的出处）", blocks.join(""), "src");
+  }catch(e){ /* 渲染失败不影响答案 */ }
+}
+
 /* 上下文裁剪：只砍最老的 tool 消息，保住 system 与用户提问 */
 function trimCtx(msgs, limit){
   let size = 0;
@@ -705,6 +810,7 @@ async function runLoop(opt){
   if(!opt || !opt.cfg || !opt.cfg.key) throw new Error("runLoop: 缺少端点配置");
 
   HITS = [];
+  REFS = { book:{}, web:{}, todo:{}, att:{} };   // 每次新问重置引用登记表
   USAGE = _blankUsage();               // 每次新问重置账本
   traceReset(opt.bub);                 // 轨迹气泡锚在答案气泡之前（主公要求：先见过程，再见答案）
 
@@ -779,6 +885,7 @@ async function runLoop(opt){
       }catch(e){ res = {ok:false, msg:"执行异常：" + (e && e.message || e)}; }
 
       trace(fn, args, res);
+      collectRefs(fn, res);            // 角标 → 出处 登记，供答案后的「引用对照」卡用
       USAGE.toolCalls++;
       const _c = clip(guard(res), CFG.CLIP);
       USAGE.toolChars += String(_c).length;
@@ -816,6 +923,10 @@ async function runLoop(opt){
     /* 仍然没拿到能看的文本 → 交还控制权，由 ask() 走原直线 RAG 兜底 */
     return "";
   }
+  /* 有答案才渲染：答案里的〔n〕〔网n〕〔待办n〕要能查到出处。
+     位置在答案气泡之后（addMsg 是尾部 append），正好当"参考文献"读。
+     降级路径已在上面的 return "" 处截断，不会给直线 RAG 多贴一张卡。 */
+  renderRefs();
   return final;
 }
 
@@ -847,7 +958,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent2",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
+  v:"v2-agent3",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
   runLoop,
   selfTest,
   CFG,
@@ -857,6 +968,7 @@ window.AGENT = {
   failed:false,                     /* 一旦崩过就置 true，由 ask() 降级用 */
   setBusy(v){ try{ busy = !!v; }catch(e){} },   /* busy 是 index.html 的顶层 let，只能从这边改 */
   usage(){ return Object.assign({}, USAGE); },  /* 本轮用量：轮次 / 工具次数 / token */
+  refs(){ return JSON.parse(JSON.stringify(REFS)); },  /* 本轮引用登记表（排错/自检用） */
   _state(){ return {hits:HITS.length, failed:window.AGENT.failed, usage:USAGE}; }
 };
 
