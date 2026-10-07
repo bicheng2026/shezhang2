@@ -3442,6 +3442,20 @@ renderNetStat();
   /* 口令只存本机浏览器，**输一次就长期记住**（2026-10-07 主公明确：不要 24 小时过期）。
      万一要换口令，列表右上角有「换口令」，或到设置里清本机数据。 */
   var QQ_SAVE = "sz2_qq_tok";
+  /* 「删掉」只删**本机显示**，云端不动（2026-10-07 主公明确）。
+     理由：杂不杂乱是各人判断 —— 班长觉得吵的消息，同学可能想看。
+     所以隐藏列表存本机 localStorage，只影响这台设备，别人看不到任何变化。 */
+  var QQ_HIDE = "sz2_qq_hid";
+  function qqHidden(){
+    try{ var a = JSON.parse(localStorage.getItem(QQ_HIDE) || "[]"); return Array.isArray(a) ? a : []; }
+    catch(e){ return []; }
+  }
+  function qqHide(ids){
+    var h = qqHidden();
+    ids.forEach(function(i){ if(i && h.indexOf(i) < 0) h.push(i); });
+    try{ localStorage.setItem(QQ_HIDE, JSON.stringify(h)); }catch(e){}
+    return h.length;
+  }
 
   function qqSaved(){
     try{
@@ -3524,19 +3538,35 @@ renderNetStat();
       return;
     }
     /* 顶部工具条 + 每条一个勾选框 —— 2026-10-07 主公要求：
-       不再靠关键词自动筛，**全收进来由人勾选删**，只留精华。 */
+       不再靠关键词自动筛，**全收进来由人勾选隐藏**，只留精华。
+       「隐藏」只写本机，云端不动。 */
+    var hid = qqHidden();
+    var all = j.items || [];
+    var vis = all.filter(function(x){ return hid.indexOf(String(x.id || "")) < 0; });
+
+    if(!vis.length){
+      box.innerHTML = '<div class="empty">这 ' + all.length + ' 条都被你隐藏了<br>' +
+        '<a href="javascript:window.qqUnhideAll()" style="color:var(--teal);font-size:12.5px">全部恢复显示</a></div>';
+      return;
+    }
+
     var h = '<div style="font-size:12px;opacity:.72;margin:0 0 10px;display:flex;flex-wrap:wrap;' +
             'gap:8px;align-items:center">' +
-              '<span>共 ' + j.count + ' 条 · 已脱敏</span>' +
+              '<span>共 ' + vis.length + ' 条 · 已脱敏' +
+                (hid.length ? '（已隐藏 ' + hid.length + '）' : '') + '</span>' +
               '<span style="flex:1"></span>' +
               '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" onclick="qqToggleAll()">全选/取消</button>' +
               '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px;border-color:#c0392b;color:#c0392b" ' +
-                'onclick="qqDeleteSelected()">删除勾选</button>' +
+                'onclick="qqDeleteSelected()">隐藏勾选</button>' +
+              (hid.length ? '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" ' +
+                'onclick="qqUnhideAll()">恢复 ' + hid.length + '</button>' : '') +
               '<a href="javascript:window.qqForgetAndAsk()" style="color:var(--dim);font-size:11.5px">换口令</a>' +
             '</div>' +
+            '<div style="font-size:11px;opacity:.5;margin:-4px 0 10px">' +
+              '「隐藏」只影响你这台设备，云端和其他同学都不受影响。</div>' +
             '<ul style="list-style:none;margin:0;padding:0">';
-    for(var i=0;i<j.items.length;i++){
-      var it = j.items[i];
+    for(var i=0;i<vis.length;i++){
+      var it = vis[i];
       h += '<li style="border-left:3px solid var(--teal);padding:8px 11px;margin:0 0 8px;' +
         'border-radius:0 7px 7px 0;background:rgba(90,209,192,.06);display:flex;gap:9px;align-items:flex-start">' +
         '<input type="checkbox" class="qqck" value="' + esc(String(it.id || "")) + '" ' +
@@ -3561,25 +3591,25 @@ renderNetStat();
     cks.forEach(function(c){ c.checked = !allOn; });
   };
 
-  /* 删除勾选的条目。**要管理员密码** —— 班群口令是只读的，不能拿来删，
-     否则每个拿到口令的同学都能清空消息。 */
-  window.qqDeleteSelected = async function(){
+  /* 「删掉」= 只在本机隐藏，**云端不动**（2026-10-07 主公明确）。
+     不需要管理员密码、不影响其他同学；随时可以「恢复」找回来。 */
+  window.qqDeleteSelected = function(){
     var cks = document.querySelectorAll("#qqdigest .qqck:checked");
-    if(!cks.length){ alert("先勾选要删的条目"); return; }
+    if(!cks.length){ alert("先勾选要隐藏的条目"); return; }
     var ids = [];
     cks.forEach(function(c){ if(c.value) ids.push(c.value); });
-    if(!ids.length){ alert("这些条目没有 id（可能是旧数据），删不了"); return; }
-    if(!confirm("确定删掉勾选的 " + ids.length + " 条？删了就从云端消失，不可撤销。")) return;
-    var pw = prompt("删除需要管理员密码（Ctrl+Shift+A 进后台的那个）");
-    if(!pw) return;
-    var salt = (window.ACCESS && window.ACCESS.salt) || "sz1";
-    var r = null;
-    try{ r = await window.callCloud("qqdel", { pw: pw, salt: salt, ids: ids }); }catch(e){ r = null; }
-    if(r && r.ok){
-      window.qqFetch(qqSaved(), true);   /* 删完重新拉一遍 */
-    } else {
-      alert("删除失败：" + ((r && r.msg) || "管理员密码不对，或云端没响应"));
-    }
+    if(!ids.length){ alert("这些条目缺 id，无法隐藏"); return; }
+    if(!confirm("把这 " + ids.length + " 条从**你的页面**隐藏？\n\n只影响你这台设备，云端和其他同学都不受影响，随时可恢复。")) return;
+    qqHide(ids);
+    window.qqFetch(qqSaved(), true);   /* 重新渲染，被隐藏的就不显示了 */
+  };
+  /* 恢复全部隐藏 */
+  window.qqUnhideAll = function(){
+    var n = qqHidden().length;
+    if(!n){ alert("没有隐藏的条目"); return; }
+    if(!confirm("把之前隐藏的 " + n + " 条全部显示回来？")) return;
+    try{ localStorage.removeItem(QQ_HIDE); }catch(e){}
+    window.qqFetch(qqSaved(), true);
   };
   window.qqForgetAndAsk = function(){ qqForget(); qqAskPw(""); };
 
