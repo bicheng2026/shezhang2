@@ -3670,9 +3670,64 @@ renderNetStat();
       return;
     }
     var LV = ["P0","P1","P2","P3"], NM = {P0:"紧急",P1:"重要",P2:"一般",P3:"低"};
+
+    /* ===== 分类标签（2026-10-07 复活）=====
+       数据层其实一直在算分类，写在 reason 字段里，例如：
+         「🏆 比赛/竞赛类（大赛）→ 置顶；识别到截止日 2026-11-01；命中画像词：…」
+       但之前的渲染只按 P0/P1/P2 分组，把 reason 和 pin 整个丢了 ——
+       于是比赛/竞赛这类既没置顶也没标签，看着像"分类没了"。
+       这里把标签从 reason 里还原出来，并让置顶（pin=1）真的排到最前。 */
+    function todoTags(x){
+      var r = String(x.reason || "");
+      var T = [];
+      if (/🏆|比赛|竞赛|大赛|挑战杯|创新创业|互联网\+/.test(r)) T.push(["🏆 比赛/竞赛", "#c9a227"]);
+      else if (/讲座|培训|会议|学术/.test(r)) T.push(["🎓 讲座培训", "#6ea8d8"]);
+      else if (/考试|测验|补考|重修|成绩/.test(r)) T.push(["📝 考试教务", "#c0392b"]);
+      else if (/选课|教学|教务|学分/.test(r)) T.push(["🎓 教务选课", "#5ad1c0"]);
+      else if (/志愿|招募|志愿者/.test(r)) T.push(["❤️ 志愿招募", "#7fb069"]);
+      else if (/通知|公告|提醒/.test(r)) T.push(["📢 通知", "#8ba0a7"]);
+      if (x.ddl) T.push(["⏰ " + x.ddl, "#c0392b"]);
+      return T;
+    }
+    function tagHtml(x){
+      var T = todoTags(x);
+      if(!T.length) return "";
+      return T.map(function(t){
+        return '<span style="display:inline-block;font-size:10.5px;line-height:1.5;padding:1px 6px;' +
+               'border-radius:5px;margin-right:5px;border:1px solid ' + t[1] + '66;color:' + t[1] + '">' +
+               esc(t[0]) + '</span>';
+      }).join("");
+    }
+    /* 置顶排最前：pin=1 的先出，其余按原顺序 */
+    items = items.slice().sort(function(a,b){ return (b.pin ? 1 : 0) - (a.pin ? 1 : 0); });
+
+    var pinN = items.filter(function(x){ return x.pin; }).length;
     var html = "", n = 0;
+    if(pinN){
+      html += '<div class="grp" style="color:#c9a227">⭐ 置顶 · 比赛/竞赛类（' + pinN + '）</div>';
+      items.filter(function(x){ return x.pin; }).forEach(function(x){
+        n++;
+        var u = (typeof x.url === "string" && /^https?:\/\//i.test(x.url)) ? x.url : "";
+        var titleHtml = u
+          ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" ' +
+            'style="color:inherit;text-decoration:none;border-bottom:1px dashed currentColor">' +
+            esc(x.title) + ' <span style="opacity:.55;font-size:11px">↗</span></a>'
+          : esc(x.title);
+        html += '<div class="it ' + (x.level || "P2") + '">' +
+          '<div style="margin-bottom:3px">' + tagHtml(x) + '</div>' +
+          '<div class="t">' + titleHtml + '</div>' +
+          '<div class="m">' +
+            "<span>来自 " + esc(x.src || "") + "</span>" +
+            /* 优先显示**官网发布时间**（学校什么时候发的）；
+               老数据没有这个字段，才回落显示抓取时间，并注明是抓取时间。 */
+            (x.pubdate ? "<span>发布于 " + esc(x.pubdate) + "</span>"
+                       : (x.ts ? "<span>抓取于 " + fmt(x.ts) + "</span>" : "")) +
+          "</div></div>";
+      });
+    }
+
     LV.forEach(function(lv){
-      var g = items.filter(function(x){ return x.level === lv; });
+      var g = items.filter(function(x){ return x.level === lv && !x.pin; });
       if(!g.length) return;
       html += '<div class="grp">' + lv + " · " + NM[lv] + "（" + g.length + "）</div>";
       g.forEach(function(x){
@@ -3686,11 +3741,14 @@ renderNetStat();
             'style="color:inherit;text-decoration:none;border-bottom:1px dashed currentColor">' +
             esc(x.title) + ' <span style="opacity:.55;font-size:11px">↗</span></a>'
           : esc(x.title);
-        html += '<div class="it ' + lv + '"><div class="t">' + titleHtml + "</div>" +
+        /* 标签行放在标题上方（截止日已在标签里，不再在下面重复一遍） */
+        html += '<div class="it ' + lv + '">' +
+          '<div style="margin-bottom:3px">' + tagHtml(x) + '</div>' +
+          '<div class="t">' + titleHtml + "</div>" +
           '<div class="m">' +
-            (x.ddl ? "<span>截止 " + esc(x.ddl) + "</span>" : "") +
             "<span>来自 " + esc(x.src) + "</span>" +
-            (x.ts ? "<span>" + fmt(x.ts) + "</span>" : "") +
+            (x.pubdate ? "<span>发布于 " + esc(x.pubdate) + "</span>"
+                       : (x.ts ? "<span>抓取于 " + fmt(x.ts) + "</span>" : "")) +
             (u ? '<span style="opacity:.6">可点标题直达原文</span>' : "") +
           "</div></div>";
       });
