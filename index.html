@@ -1300,7 +1300,16 @@ function search(q, topk=10){
     let bestSc = 0, bestI = -1;
     for(let i=0;i<d.s.length;i++){
       const ti = d.s[i][0]; let sc = 0;
+      /* 章节标题命中（权重 3 —— 标题是手工写的，最权威） */
       for(const t of tk){ if(ti.includes(t)) sc += t.length*3; }
+      /* 章节**正文关键词**命中（权重 2）—— 2026-10-07 新增。
+         解决的是这个问题：教材标题写「糖的无氧氧化分为糖酵解和乳酸生成两个阶段」，
+         根本没有「糖代谢」这个词，而正文里全是。关键词由 build_index3.py
+         用全库词表标注，只记该章正文**确实出现过**的词表词。 */
+      const kw = d.s[i][2];
+      if(kw && typeof kw === "string"){
+        for(const t of tk){ if(kw.indexOf(t) >= 0) sc += t.length*2; }
+      }
       if(sc>bestSc){ bestSc=sc; bestI=i; }
     }
     const total = dsc*0.7 + bestSc;
