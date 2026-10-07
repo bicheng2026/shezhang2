@@ -825,12 +825,38 @@ function adminPageHtml(state){
       btn('bqcopy','复制','#64748b') +
       btn('bqreset','重置（换新口令）','#b91c1c') +
       '<div id="r4" style="margin-top:10px;font-size:13px;min-height:22px"></div>') +
-    card('3. 改管理员密码',
+    card('3. 机器人接入（填你自己的 AppID / AppSecret）',
+      '<div style="background:#eef6ff;border-left:3px solid #3b82f6;padding:9px 12px;border-radius:0 6px 6px 0;font-size:12px;line-height:1.75;margin-bottom:10px">' +
+      '在这里填 <b>AppID / AppSecret / 公钥</b>，保存即生效 —— <b>不用再去腾讯云控制台改环境变量</b>。<br>' +
+      '<b>⚠️ 但有一件事网页替不了</b>：QQ 开放平台的「回调地址」必须到 <code>q.qq.com</code> 后台填。' +
+      '下面那个地址直接复制过去。</div>' +
+      '<div style="background:#f8fafc;border:1px solid #e3e6ea;border-radius:9px;padding:11px 13px;margin-bottom:12px">' +
+        '<div style="font-size:11.5px;opacity:.65;margin-bottom:4px">回调地址（复制到 QQ 后台的「消息推送 / Webhook」）</div>' +
+        '<code id="botcb" style="font-size:12.5px;word-break:break-all;user-select:all">读取中…</code>' +
+        '<button id="bcbcopy" style="margin-left:8px;padding:5px 10px;border:1px solid #d0d5dd;border-radius:7px;background:#fff;cursor:pointer;font:inherit;font-size:12px">复制</button>' +
+      '</div>' +
+      '<div style="display:grid;gap:8px">' +
+        '<div><span style="font-size:12px;opacity:.7">AppID</span><br>' +
+          '<input id="botappid" placeholder="例如 1905465027" style="width:100%;padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit"></div>' +
+        '<div><span style="font-size:12px;opacity:.7">AppSecret（留空=不改）</span><br>' +
+          '<input id="botsecret" type="password" placeholder="留空则保持原值" autocomplete="new-password" style="width:100%;padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit"></div>' +
+        '<div><span style="font-size:12px;opacity:.7">公钥 PUBKEY（留空=不改）</span><br>' +
+          '<input id="botpubkey" placeholder="QQ 后台开发设置里能拿到" style="width:100%;padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit"></div>' +
+      '</div>' +
+      '<div style="margin-top:12px">' +
+        btn('bbotload','读取当前','#64748b') +
+        btn('bbotsave','保存','#0f766e') +
+      '</div>' +
+      '<div id="r5" style="margin-top:10px;font-size:13px;min-height:22px"></div>' +
+      '<div style="font-size:11.5px;opacity:.6;line-height:1.7;margin-top:8px">' +
+      '凭据存在<b>私密库</b>（不在公开仓库）。填完保存后，再去 QQ 后台把上面的回调地址填上，' +
+      '机器人就能把群消息推进来了。详细步骤见「🔌 机器人接入指南」。</div>') +
+    card('4. 改管理员密码',
       '<input id="np" type="password" placeholder="新管理员密码（至少 6 位）" ' +
         'style="padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;width:220px">' +
       btn('badmin','保存','#0f766e') +
       '<div id="r2" style="margin-top:8px;font-size:13px;min-height:22px"></div>') +
-    card('4. 上传资料到文库',
+    card('5. 上传资料到文库',
       '<div style="font-size:12px;opacity:.8;line-height:1.7;margin-bottom:8px">' +
       '上传到 <code>lib/</code>。<br>⚠️ <b>目前索引里只有教材</b>——教材以外的资料<b>故意不建索引</b>' +
       '（涉版权，回答时可参考但不展示、不引用），所以上传了也不会显示，这是设计如此。</div>' +
@@ -919,6 +945,51 @@ function bindAdmin(w, salt, pw){
     var r = await qqAct('qqreset');
     if(r && r.ok) qqPaint(r, '已重置。新口令发到班群即可：' + r.token);
     else set('r4', '失败：' + ((r && r.msg) || '云端没响应'), '#b91c1c');
+  });
+
+  /* ---- 3. 机器人接入：读当前 / 保存 / 复制回调地址 ----
+     回调地址就是云函数的地址 —— 这一段必须复制到 q.qq.com 后台，网页替不了。 */
+  var cbEl = d.getElementById('botcb');
+  if(cbEl) cbEl.textContent = CLOUD;
+  var bc = d.getElementById('bcbcopy');
+  if(bc) bc.addEventListener('click', function(){
+    try{
+      navigator.clipboard.writeText(CLOUD);
+      set('r5', '已复制回调地址，去 q.qq.com 后台「消息推送 / Webhook」粘上', '#059669');
+    }catch(e){
+      set('r5', '浏览器不给复制，请手动选中：' + CLOUD, '#b91c1c');
+    }
+  });
+  async function botAct(act, extra){
+    set('r5', '处理中…', '#667085');
+    var r = null;
+    try{ r = await window.callCloud(act, Object.assign({pw: pw, salt: salt}, extra || {})); }catch(e){ r = null; }
+    return r;
+  }
+  var bl = d.getElementById('bbotload');
+  if(bl) bl.addEventListener('click', async function(){
+    var r = await botAct('botget');
+    if(r && r.ok){
+      var a = d.getElementById('botappid'); if(a) a.value = r.appid || '';
+      set('r5', '当前 AppID：' + (r.appid || '（空）') +
+                '　｜　AppSecret：' + (r.hasSecret ? r.secretMask : '未设置') +
+                '　｜　公钥：' + (r.hasPubkey ? '已设置' : '未设置'), '#059669');
+    } else set('r5', '读取失败：' + ((r && r.msg) || '云端没响应'), '#b91c1c');
+  });
+  var bsave = d.getElementById('bbotsave');
+  if(bsave) bsave.addEventListener('click', async function(){
+    var a = d.getElementById('botappid'), s2 = d.getElementById('botsecret'), k = d.getElementById('botpubkey');
+    var o = {};
+    if(a && a.value.trim()) o.appid = a.value.trim();
+    if(s2 && s2.value.trim()) o.secret = s2.value.trim();
+    if(k && k.value.trim()) o.pubkey = k.value.trim();
+    if(!Object.keys(o).length){ set('r5', '三个格都空的，没东西可存', '#b91c1c'); return; }
+    var r = await botAct('botset', o);
+    if(r && r.ok){
+      if(s2) s2.value = '';               /* 存完就清掉，别留在页面上 */
+      set('r5', '已保存：' + (r.saved || []).join(' / ') +
+                '　→　下一步把上面的回调地址填到 q.qq.com 后台即可。', '#059669');
+    } else set('r5', '保存失败：' + ((r && r.msg) || '云端没响应'), '#b91c1c');
   });
 
   var ba = d.getElementById('badmin');
@@ -3368,30 +3439,116 @@ renderNetStat();
         页面这边相应改成「输口令 → 打开云端手机页」，内容不再经过公开仓库。
      公告与待办那一栏是官网公开信息，不受影响。 */
   var QQ_CF = "https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com";
-  window.loadQqDigest = function(){
+  var QQ_SAVE = "sz2_qq_tok";     /* {v:口令, exp:到期毫秒} */
+  var QQ_DAY = 24 * 3600 * 1000;
+
+  function qqSaved(){
+    try{
+      var s = JSON.parse(localStorage.getItem(QQ_SAVE) || "null");
+      if(s && s.v && s.exp > Date.now()) return s.v;
+      localStorage.removeItem(QQ_SAVE);
+    }catch(e){}
+    return "";
+  }
+  function qqSave(t){
+    try{ localStorage.setItem(QQ_SAVE, JSON.stringify({ v: t, exp: Date.now() + QQ_DAY })); }catch(e){}
+  }
+  function qqForget(){
+    try{ localStorage.removeItem(QQ_SAVE); }catch(e){}
+  }
+
+  /* 口令待输入界面（没存过口令 / 口令过期时） */
+  function qqAskPw(msg){
     var box = document.getElementById("qqdigest");
     if(!box) return;
-    /* 已渲染过就别重刷，否则「刷新」一按就把用户刚输的口令清掉了 */
-    if(box.querySelector("#qqpw")) return;
     box.innerHTML =
       '<div style="line-height:1.9;font-size:13.5px">' +
         '<b>班群消息不放公开仓库</b><br>' +
-        '<span style="font-size:12.5px;opacity:.75">群聊内容含同学隐私，按约定只存在私密位置，' +
-        '网页这份公开文件里不会有。要查看请输口令，在云端页面打开（已脱敏：不含姓名/学号/手机号）。</span>' +
+        '<span style="font-size:12.5px;opacity:.75">群聊内容含同学隐私，按约定只存在私密位置。' +
+        '输入口令后<b>本机记住 24 小时</b>，期间打开就能直接看，不用重复输。' +
+        '（内容已脱敏：不含姓名/学号/手机号）</span>' +
       '</div>' +
+      (msg ? '<div style="color:#c0392b;font-size:12.5px;margin-top:8px">' + esc(msg) + '</div>' : '') +
       '<div style="margin:14px 0 0;display:flex;gap:8px;flex-wrap:wrap">' +
         '<input id="qqpw" type="password" placeholder="班群口令" autocomplete="off" ' +
           'style="flex:1;min-width:150px;padding:9px 11px;border-radius:9px;border:1px solid var(--line);' +
           'background:var(--bg);color:var(--ink);font-size:13.5px;outline:none">' +
-        '<button class="iconbtn" onclick="openQqCloud()">打开班群消息</button>' +
+        '<button class="iconbtn" style="border-color:var(--teal);color:var(--teal)" ' +
+          'onclick="qqUnlock()">解锁</button>' +
       '</div>' +
       '<div style="font-size:12px;opacity:.6;margin-top:10px">口令没带在身上？在班群里问班长。</div>';
+    var el = document.getElementById("qqpw");
+    if(el){
+      el.focus();
+      el.addEventListener("keydown", function(e){ if(e.key === "Enter") window.qqUnlock(); });
+    }
+  }
+
+  /* 真正去云端取消息，取回来在**本页**渲染（不再新开网页） */
+  window.qqFetch = function(tok, isRetry){
+    var box = document.getElementById("qqdigest");
+    if(!box) return;
+    if(!tok){ qqAskPw(""); return; }
+    box.innerHTML = '<div class="empty">正在取班群消息…</div>';
+    fetch(QQ_CF + "/qq?limit=60&t=" + encodeURIComponent(tok), {cache: "no-store"})
+      .then(function(r){
+        if(r.status === 401) throw new Error("TOKEN");
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function(j){
+        if(isRetry || qqSaved() !== tok) qqSave(tok);   /* 口令对，才记住 */
+        qqRender(j);
+      })
+      .catch(function(e){
+        var m = (e && e.message) || String(e);
+        if(m === "TOKEN"){ qqForget(); qqAskPw("口令不对或已失效，请再输一次"); }
+        else box.innerHTML = '<div class="empty">取不到班群消息（' + esc(m) + '）<br>' +
+             '<span style="font-size:12px;opacity:.7">不影响公告查看。</span></div>';
+      });
   };
-  window.openQqCloud = function(){
+  /* 解锁按钮：先存下口令再取，失败会自动清掉 */
+  window.qqUnlock = function(){
     var el = document.getElementById("qqpw");
     var t = el ? String(el.value || "").trim() : "";
-    if(!t){ alert("请先输入班群口令"); if(el) el.focus(); return; }
-    window.open(QQ_CF + "/page?kind=qq&t=" + encodeURIComponent(t), "_blank", "noopener");
+    if(!t){ if(el) el.focus(); return; }
+    window.qqFetch(t, true);
+  };
+
+  function qqRender(j){
+    var box = document.getElementById("qqdigest");
+    if(!box) return;
+    if(!j || !j.count || !j.items || !j.items.length){
+      box.innerHTML = '<div class="empty">还没有收集到有信息量的班群消息<br>' +
+        '<span style="font-size:12px;opacity:.7">通知 / 截止 / 讲座 / 考试这类会上这里，闲聊不收</span></div>';
+      return;
+    }
+    var h = '<div style="font-size:12px;opacity:.72;margin:0 0 10px">共 ' + j.count + ' 条 · 已脱敏' +
+            '　<a href="javascript:window.qqForgetAndAsk()" style="color:var(--dim);font-size:11.5px">换口令</a></div>' +
+            '<ul style="list-style:none;margin:0;padding:0">';
+    for(var i=0;i<j.items.length;i++){
+      var it = j.items[i];
+      h += '<li style="border-left:3px solid var(--teal);padding:8px 11px;margin:0 0 8px;' +
+        'border-radius:0 7px 7px 0;background:rgba(90,209,192,.06)">' +
+        '<div style="font-size:11.5px;opacity:.65;margin-bottom:3px">' +
+          esc(it.timeText || (it.time || "").slice(5,16) || "") + '</div>' +
+        '<div style="line-height:1.7;font-size:13.5px;white-space:pre-wrap;word-break:break-word">' +
+          esc(it.text || it.title || "") + '</div>' +
+        (it.ddl ? '<div style="font-size:12px;color:#c0392b;margin-top:3px">截止 ' + esc(it.ddl) + '</div>' : '') +
+        '</li>';
+    }
+    box.innerHTML = h + '</ul>';
+  }
+  window.qqForgetAndAsk = function(){ qqForget(); qqAskPw(""); };
+
+  window.loadQqDigest = function(){
+    var box = document.getElementById("qqdigest");
+    if(!box) return;
+    if(box.getAttribute("data-on") === "1") return;   /* 已经渲染过就别重刷 */
+    box.setAttribute("data-on", "1");
+    var t = qqSaved();
+    if(t) window.qqFetch(t);      /* 24h 内不用再输 */
+    else qqAskPw("");
   };
   window.szSwitchTab = function(n){
     var a = document.getElementById("todobody"), b = document.getElementById("qqdigest");
