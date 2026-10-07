@@ -3439,19 +3439,19 @@ renderNetStat();
         页面这边相应改成「输口令 → 打开云端手机页」，内容不再经过公开仓库。
      公告与待办那一栏是官网公开信息，不受影响。 */
   var QQ_CF = "https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com";
-  var QQ_SAVE = "sz2_qq_tok";     /* {v:口令, exp:到期毫秒} */
-  var QQ_DAY = 24 * 3600 * 1000;
+  /* 口令只存本机浏览器，**输一次就长期记住**（2026-10-07 主公明确：不要 24 小时过期）。
+     万一要换口令，列表右上角有「换口令」，或到设置里清本机数据。 */
+  var QQ_SAVE = "sz2_qq_tok";
 
   function qqSaved(){
     try{
       var s = JSON.parse(localStorage.getItem(QQ_SAVE) || "null");
-      if(s && s.v && s.exp > Date.now()) return s.v;
-      localStorage.removeItem(QQ_SAVE);
+      if(s && s.v) return s.v;          /* 存过就一直用，不设过期 */
     }catch(e){}
     return "";
   }
   function qqSave(t){
-    try{ localStorage.setItem(QQ_SAVE, JSON.stringify({ v: t, exp: Date.now() + QQ_DAY })); }catch(e){}
+    try{ localStorage.setItem(QQ_SAVE, JSON.stringify({ v: t })); }catch(e){}
   }
   function qqForget(){
     try{ localStorage.removeItem(QQ_SAVE); }catch(e){}
@@ -3465,7 +3465,7 @@ renderNetStat();
       '<div style="line-height:1.9;font-size:13.5px">' +
         '<b>班群消息不放公开仓库</b><br>' +
         '<span style="font-size:12.5px;opacity:.75">群聊内容含同学隐私，按约定只存在私密位置。' +
-        '输入口令后<b>本机记住 24 小时</b>，期间打开就能直接看，不用重复输。' +
+        '输入一次口令后<b>本机长期记住</b>，以后打开直接看，不用再输。' +
         '（内容已脱敏：不含姓名/学号/手机号）</span>' +
       '</div>' +
       (msg ? '<div style="color:#c0392b;font-size:12.5px;margin-top:8px">' + esc(msg) + '</div>' : '') +
@@ -3523,22 +3523,64 @@ renderNetStat();
         '<span style="font-size:12px;opacity:.7">通知 / 截止 / 讲座 / 考试这类会上这里，闲聊不收</span></div>';
       return;
     }
-    var h = '<div style="font-size:12px;opacity:.72;margin:0 0 10px">共 ' + j.count + ' 条 · 已脱敏' +
-            '　<a href="javascript:window.qqForgetAndAsk()" style="color:var(--dim);font-size:11.5px">换口令</a></div>' +
+    /* 顶部工具条 + 每条一个勾选框 —— 2026-10-07 主公要求：
+       不再靠关键词自动筛，**全收进来由人勾选删**，只留精华。 */
+    var h = '<div style="font-size:12px;opacity:.72;margin:0 0 10px;display:flex;flex-wrap:wrap;' +
+            'gap:8px;align-items:center">' +
+              '<span>共 ' + j.count + ' 条 · 已脱敏</span>' +
+              '<span style="flex:1"></span>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" onclick="qqToggleAll()">全选/取消</button>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px;border-color:#c0392b;color:#c0392b" ' +
+                'onclick="qqDeleteSelected()">删除勾选</button>' +
+              '<a href="javascript:window.qqForgetAndAsk()" style="color:var(--dim);font-size:11.5px">换口令</a>' +
+            '</div>' +
             '<ul style="list-style:none;margin:0;padding:0">';
     for(var i=0;i<j.items.length;i++){
       var it = j.items[i];
       h += '<li style="border-left:3px solid var(--teal);padding:8px 11px;margin:0 0 8px;' +
-        'border-radius:0 7px 7px 0;background:rgba(90,209,192,.06)">' +
-        '<div style="font-size:11.5px;opacity:.65;margin-bottom:3px">' +
-          esc(it.timeText || (it.time || "").slice(5,16) || "") + '</div>' +
-        '<div style="line-height:1.7;font-size:13.5px;white-space:pre-wrap;word-break:break-word">' +
-          esc(it.text || it.title || "") + '</div>' +
-        (it.ddl ? '<div style="font-size:12px;color:#c0392b;margin-top:3px">截止 ' + esc(it.ddl) + '</div>' : '') +
-        '</li>';
+        'border-radius:0 7px 7px 0;background:rgba(90,209,192,.06);display:flex;gap:9px;align-items:flex-start">' +
+        '<input type="checkbox" class="qqck" value="' + esc(String(it.id || "")) + '" ' +
+          'style="margin-top:4px;flex-shrink:0;width:15px;height:15px;cursor:pointer">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:11.5px;opacity:.65;margin-bottom:3px">' +
+            esc(it.timeText || (it.time || "").slice(5,16) || "") + '</div>' +
+          '<div style="line-height:1.7;font-size:13.5px;white-space:pre-wrap;word-break:break-word">' +
+            esc(it.text || it.title || "") + '</div>' +
+          (it.ddl ? '<div style="font-size:12px;color:#c0392b;margin-top:3px">截止 ' + esc(it.ddl) + '</div>' : '') +
+        '</div></li>';
     }
     box.innerHTML = h + '</ul>';
   }
+
+  /* 全选 / 取消全选 */
+  window.qqToggleAll = function(){
+    var cks = document.querySelectorAll("#qqdigest .qqck");
+    if(!cks.length) return;
+    var allOn = true;
+    cks.forEach(function(c){ if(!c.checked) allOn = false; });
+    cks.forEach(function(c){ c.checked = !allOn; });
+  };
+
+  /* 删除勾选的条目。**要管理员密码** —— 班群口令是只读的，不能拿来删，
+     否则每个拿到口令的同学都能清空消息。 */
+  window.qqDeleteSelected = async function(){
+    var cks = document.querySelectorAll("#qqdigest .qqck:checked");
+    if(!cks.length){ alert("先勾选要删的条目"); return; }
+    var ids = [];
+    cks.forEach(function(c){ if(c.value) ids.push(c.value); });
+    if(!ids.length){ alert("这些条目没有 id（可能是旧数据），删不了"); return; }
+    if(!confirm("确定删掉勾选的 " + ids.length + " 条？删了就从云端消失，不可撤销。")) return;
+    var pw = prompt("删除需要管理员密码（Ctrl+Shift+A 进后台的那个）");
+    if(!pw) return;
+    var salt = (window.ACCESS && window.ACCESS.salt) || "sz1";
+    var r = null;
+    try{ r = await window.callCloud("qqdel", { pw: pw, salt: salt, ids: ids }); }catch(e){ r = null; }
+    if(r && r.ok){
+      window.qqFetch(qqSaved(), true);   /* 删完重新拉一遍 */
+    } else {
+      alert("删除失败：" + ((r && r.msg) || "管理员密码不对，或云端没响应"));
+    }
+  };
   window.qqForgetAndAsk = function(){ qqForget(); qqAskPw(""); };
 
   window.loadQqDigest = function(){
