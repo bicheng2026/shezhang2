@@ -3623,11 +3623,29 @@ function openDoc(d){
   }catch(e){}
 }
 /* 先用 HEAD 探一下 PDF 在不在：通得过才切过去，否则老实停在文字版，
-   免得同学看到一片「无法加载 PDF」。文字版始终保留。 */
+   免得同学看到一片「无法加载 PDF」。文字版始终保留。
+   🔴 多册的书要**逐册都探**：大书拆分后是分批推上去的，
+      完全可能出现「第 1 册还没推上、第 2 册已经在」的空档期。
+      这时候应该落在第一个真正可用的册，而不是整本掉回文字版。 */
 function rdHeadProbe(d, u){
-  fetch(u, {method: "HEAD", cache: "no-store"}).then(function(r){
-    if(r && r.ok && window._curDoc === d) window.toggleRdView(true);
-  }).catch(function(){ /* 探测失败就留在文字版 */ });
+  var arr = (_rdPdfParts && _rdPdfParts.length > 1) ? _rdPdfParts.slice() : [u];
+  Promise.all(arr.map(function(url){
+    return fetch(url, {method: "HEAD", cache: "no-store"})
+      .then(function(r){ return (r && r.ok) ? url : ""; })
+      .catch(function(){ return ""; });
+  })).then(function(res){
+    if(window._curDoc !== d) return;
+    var hit = -1;
+    for(var i = 0; i < res.length; i++){ if(res[i]){ hit = i; break; } }
+    if(hit < 0){                                  /* 一册都不在 → 藏掉按钮，留在文字版 */
+      var pv = document.getElementById("rdviewbtn");
+      if(pv) pv.style.display = "none";
+      return;
+    }
+    _rdPdfIdx = hit; _rdPdfUrl = arr[hit];
+    rdPartLabel();
+    window.toggleRdView(true);
+  }).catch(function(){});
 }
 async function readSec(d, i){
   const a = d.s[i][1];
