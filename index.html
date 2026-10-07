@@ -347,6 +347,9 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <!-- 一键全屏：只在看 PDF 时出现（2026-10-07 主公要求） -->
     <button id="rdfullbtn" class="iconbtn" onclick="rdFullscreen()" style="display:none"
             title="把 PDF 放大到整屏，再点一次或按 Esc 退出">⛶ 全屏</button>
+    <!-- 分册切换：大部头教材被拆成 2~4 册才塞得进仓库（2026-10-08） -->
+    <button id="rdpartbtn" class="iconbtn" onclick="rdNextPart()" style="display:none"
+            title="这本是多册的，点一下翻到下一册">📚 第1/1册</button>
     <button class="iconbtn" onclick="renderHome()">🏠 总览</button>
   </div>
   <div class="rdbodywrap">
@@ -3447,23 +3450,68 @@ var PDFBASES = [
   "https://bicheng2026.github.io/shezhang2-pdf2/pdf/"
 ];
 var _rdPdfOn = false, _rdPdfUrl = "";
-var _pdfMap = null;
+var _rdPdfParts = null, _rdPdfIdx = 0;   /* 多册教材：URL 数组 + 当前第几册 */
+var _pdfMap = null, _pdfParts = null;
 window.loadPdfMap = async function(){
   if(_pdfMap) return _pdfMap;
   try{
     var r = await fetch("data/pdf-map.json?t=" + Date.now(), {cache:"no-store"});
     _pdfMap = r.ok ? await r.json() : {};
   }catch(e){ _pdfMap = {}; }
+  /* 册数表：{"书名":{"r":仓号,"p":册数}}。拉不到就当没有分册，不影响单册的书 */
+  try{
+    var r2 = await fetch("data/pdf-parts.json?t=" + Date.now(), {cache:"no-store"});
+    _pdfParts = (r2.ok ? await r2.json() : {}) || {};
+  }catch(e){ _pdfParts = {}; }
   return _pdfMap;
 };
-function pdfUrlFor(d){
-  if(!d) return "";
-  if(!/^01_教材\//.test(String(d.f || ""))) return "";
+/* 某本书的第 k 册 URL（k 从 0 起）。
+   🔴 拆了册的书，第 1 册也带 .part1 后缀 —— 拆分脚本就是这么命名的，
+      千万别在这里把第 1 册特判成「不带后缀」，否则第 1 册永远 404。 */
+function pdfUrlAt(n, repoIdx, k, multi){
+  var base = PDFBASES[repoIdx] + encodeURIComponent(n);
+  return multi ? (base + ".part" + (k + 1) + ".pdf") : (base + ".pdf");
+}
+function pdfPartsOf(d){
+  if(!d) return null;
+  if(!/^01_教材\//.test(String(d.f || ""))) return null;
   var n = String(d.t || "").trim();
   var idx = 0;
-  try{ if(_pdfMap && _pdfMap[n]) idx = Number(_pdfMap[n]) - 1; }catch(e){}
+  try{ if(_pdfMap && _pdfMap[n]){
+    var v = _pdfMap[n];
+    idx = (Number(typeof v === "object" ? v.r : v) || 1) - 1;
+  } }catch(e){}
   if(!(idx >= 0 && idx < PDFBASES.length)) idx = 0;
-  return PDFBASES[idx] + encodeURIComponent(n) + ".pdf";
+  var cnt = 0;
+  try{ var p = _pdfParts && _pdfParts[n]; if(p) cnt = Number(typeof p === "object" ? p.p : p) || 0; }catch(e){}
+  if(cnt > 1){
+    var arr = [];
+    for(var k = 0; k < cnt; k++) arr.push(pdfUrlAt(n, idx, k, true));
+    return arr;
+  }
+  return [pdfUrlAt(n, idx, 0, false)];
+}
+function pdfUrlFor(d){
+  var a = pdfPartsOf(d);
+  return (a && a.length) ? a[0] : "";
+}
+/* 翻册：多册教材在 PDF 视图里点「📚 第x/y册」依次往后翻，到头回到第 1 册 */
+window.rdNextPart = function(){
+  if(!_rdPdfParts || _rdPdfParts.length < 2) return;
+  _rdPdfIdx = (_rdPdfIdx + 1) % _rdPdfParts.length;
+  _rdPdfUrl = _rdPdfParts[_rdPdfIdx];
+  var pdf = document.getElementById("rdPdf");
+  if(pdf) pdf.setAttribute("src", _rdPdfUrl);
+  rdPartLabel();
+};
+function rdPartLabel(){
+  var b = document.getElementById("rdpartbtn");
+  if(!b) return;
+  var n = _rdPdfParts ? _rdPdfParts.length : 0;
+  if(n > 1){
+    b.style.display = "inline-block";
+    b.textContent = "📚 第" + (_rdPdfIdx + 1) + "/" + n + "册";
+  } else b.style.display = "none";
 }
 /* 提前把映射拉回来，免得点开书那一刻才发现要走哪个仓。
    拉不到就当空表 → 全部走 1 号仓，不影响文字版。 */
@@ -3492,6 +3540,10 @@ window.toggleRdView = function(force){
   /* 全屏按钮只在看 PDF 时有意义，文字版没 PDF 就不用出现 */
   var fb = document.getElementById("rdfullbtn");
   if(fb) fb.style.display = _rdPdfOn ? "inline-block" : "none";
+  /* 切册按钮同理，且只在真的拆了册时才出现 */
+  rdPartLabel();
+  var pb = document.getElementById("rdpartbtn");
+  if(pb && !_rdPdfOn) pb.style.display = "none";
 };
 
 /* 一键全屏（2026-10-07 主公要求）。
@@ -3522,8 +3574,11 @@ window.rdFullscreen = function(){
 function openDoc(d){
   showReader();
   window._curDoc = d;
-  _rdPdfUrl = pdfUrlFor(d);
+  _rdPdfParts = pdfPartsOf(d);
+  _rdPdfIdx = 0;
+  _rdPdfUrl = (_rdPdfParts && _rdPdfParts[0]) || "";
   _rdPdfOn = false;
+  rdPartLabel();
   var _pv = document.getElementById("rdviewbtn");
   if(_pv){
     _pv.style.display = _rdPdfUrl ? "inline-block" : "none";
@@ -3550,12 +3605,29 @@ function openDoc(d){
      所以**先用 HEAD 探一下**：通得过才切过去，否则老老实实停在文字版，
      免得同学看到一片「无法加载 PDF」。
      文字版始终保留，点右上角「📝 文字版」可来回切。 */
-  if(_rdPdfUrl){
-    var _u = _rdPdfUrl;
-    fetch(_u, {method: "HEAD", cache: "no-store"}).then(function(r){
-      if(r && r.ok && window._curDoc === d) window.toggleRdView(true);
-    }).catch(function(){ /* 探测失败就留在文字版 */ });
-  }
+  if(_rdPdfUrl) rdHeadProbe(d, _rdPdfUrl);
+  /* 册数表是 1.2 秒后才拉的。打开书时它可能还没回来，
+     回来后补一次解析，免得这本明明分了册却只显示第 1 册、切册按钮不出现。 */
+  try{
+    window.loadPdfMap().then(function(){
+      if(window._curDoc !== d) return;              /* 期间又翻到别的书了 */
+      var old = _rdPdfUrl;
+      _rdPdfParts = pdfPartsOf(d);
+      _rdPdfIdx = 0;
+      _rdPdfUrl = (_rdPdfParts && _rdPdfParts[0]) || "";
+      rdPartLabel();
+      var _pv2 = document.getElementById("rdviewbtn");
+      if(_pv2) _pv2.style.display = _rdPdfUrl ? "inline-block" : "none";
+      if(_rdPdfUrl && _rdPdfUrl !== old && !_rdPdfOn) rdHeadProbe(d, _rdPdfUrl);
+    }).catch(function(){});
+  }catch(e){}
+}
+/* 先用 HEAD 探一下 PDF 在不在：通得过才切过去，否则老实停在文字版，
+   免得同学看到一片「无法加载 PDF」。文字版始终保留。 */
+function rdHeadProbe(d, u){
+  fetch(u, {method: "HEAD", cache: "no-store"}).then(function(r){
+    if(r && r.ok && window._curDoc === d) window.toggleRdView(true);
+  }).catch(function(){ /* 探测失败就留在文字版 */ });
 }
 async function readSec(d, i){
   const a = d.s[i][1];
