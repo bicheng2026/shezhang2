@@ -3073,13 +3073,35 @@ function showChat(){
    等于再拿一份 1 GB 额度，主站不受影响。
    只有 01_教材/ 压了 PDF；其他分类没有 → 按钮不出现，自动用文字版。
    浏览器内嵌 PDF 走 Range 流式加载，不用等整本下完。 */
-var PDFBASE = "https://bicheng2026.github.io/shezhang2-pdf/pdf/";
+/* 为什么要两个仓库：50 册压缩后合计约 1.6 GB，而 GitHub Pages 每个站点
+   只有 1 GB 软限 —— 单仓装不下。所以拆成两份，每份约 0.8 GB。
+   具体哪本书在哪个仓，由 data/pdf-map.json 决定（推送脚本生成，书名→仓号）。 */
+var PDFBASES = [
+  "https://bicheng2026.github.io/shezhang2-pdf/pdf/",
+  "https://bicheng2026.github.io/shezhang2-pdf2/pdf/"
+];
 var _rdPdfOn = false, _rdPdfUrl = "";
+var _pdfMap = null;
+window.loadPdfMap = async function(){
+  if(_pdfMap) return _pdfMap;
+  try{
+    var r = await fetch("data/pdf-map.json?t=" + Date.now(), {cache:"no-store"});
+    _pdfMap = r.ok ? await r.json() : {};
+  }catch(e){ _pdfMap = {}; }
+  return _pdfMap;
+};
 function pdfUrlFor(d){
   if(!d) return "";
   if(!/^01_教材\//.test(String(d.f || ""))) return "";
-  return PDFBASE + encodeURIComponent(String(d.t || "").trim()) + ".pdf";
+  var n = String(d.t || "").trim();
+  var idx = 0;
+  try{ if(_pdfMap && _pdfMap[n]) idx = Number(_pdfMap[n]) - 1; }catch(e){}
+  if(!(idx >= 0 && idx < PDFBASES.length)) idx = 0;
+  return PDFBASES[idx] + encodeURIComponent(n) + ".pdf";
 }
+/* 提前把映射拉回来，免得点开书那一刻才发现要走哪个仓。
+   拉不到就当空表 → 全部走 1 号仓，不影响文字版。 */
+setTimeout(function(){ try{ window.loadPdfMap(); }catch(e){} }, 1200);
 window.toggleRdView = function(force){
   if(!_rdPdfUrl) return;
   _rdPdfOn = (force === undefined) ? !_rdPdfOn : !!force;
@@ -3130,8 +3152,16 @@ function openDoc(d){
   });
   openSec(d, 0);
   /* 教材默认直接看**原版 PDF**（带插图）—— 主公要求「侧边栏加载原本的 pdf」。
-     文字版仍在，点右上角「📝 文字版」切换（文字版能选中复制、AI 也是按它检索）。 */
-  if(_rdPdfUrl) window.toggleRdView(true);
+     但 PDF 在独立仓库、有构建延迟，也可能这本刚好还没压好。
+     所以**先用 HEAD 探一下**：通得过才切过去，否则老老实实停在文字版，
+     免得同学看到一片「无法加载 PDF」。
+     文字版始终保留，点右上角「📝 文字版」可来回切。 */
+  if(_rdPdfUrl){
+    var _u = _rdPdfUrl;
+    fetch(_u, {method: "HEAD", cache: "no-store"}).then(function(r){
+      if(r && r.ok && window._curDoc === d) window.toggleRdView(true);
+    }).catch(function(){ /* 探测失败就留在文字版 */ });
+  }
 }
 async function readSec(d, i){
   const a = d.s[i][1];
