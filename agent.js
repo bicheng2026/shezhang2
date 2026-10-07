@@ -670,7 +670,10 @@ function trace(name, args, res){
     }
     _paintTrace();
     _hoist();
-    const c = document.getElementById("chat"); if(c) c.scrollTop = c.scrollHeight;
+    /* 跟随 index.html 的 autoScroll()：用户上滑看旧内容时不要每次刷新都把他拽回底部。
+       拿不到（老页面）时才退回原来的无条件滚底。 */
+    if(typeof autoScroll === "function") autoScroll();
+    else { const c = document.getElementById("chat"); if(c) c.scrollTop = c.scrollHeight; }
   }catch(e){ /* 轨迹渲染失败不影响主流程 */ }
 }
 
