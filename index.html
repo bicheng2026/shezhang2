@@ -243,14 +243,14 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
 
 <div id="down">
   <div class="box">
-    <h1>蛇 杖 一 号</h1>
+    <h1>蛇 杖 二 号</h1>
     <p id="downmsg">本站维护中，暂时停用。</p>
     <p class="by">本工具由江德胜出品</p>
   </div>
 </div>
 <div id="lock">
   <div class="box">
-    <h1>蛇 杖 一 号</h1>
+    <h1>蛇 杖 二 号</h1>
     <p>临床医学原文知识库 · 请输入访问密码</p>
     <input id="pw" type="password" placeholder="访问密码" autocomplete="current-password">
     <button onclick="unlock()">进 入</button>
@@ -769,12 +769,24 @@ function adminPageHtml(state){
       '<div id="statbox" style="font-size:13px">' + statHtml(state) + '</div>' +
       '<div style="margin-top:8px;font-size:11px;opacity:.6;line-height:1.7">' +
       '改完状态后，<b>同学要刷新网页</b>才生效（已经打开页面的不受影响）。</div>') +
-    card('2. 改管理员密码',
+    card('2. 班群口令',
+      '<div style="background:#eef6ff;border-left:3px solid #3b82f6;padding:9px 12px;border-radius:0 6px 6px 0;font-size:12px;line-height:1.7;margin-bottom:10px">' +
+      '同学在网页「<b>待办</b>」抽屉 →「<b>班群摘要</b>」里输入这个口令，就能打开云端班群消息页。<br>' +
+      '口令存在<b>私密库</b>（不在公开仓库）；重置后旧口令<b>立即失效</b>，需要重新通知班里。</div>' +
+      '<div style="background:#f8fafc;border:1px solid #e3e6ea;border-radius:9px;padding:11px 13px;margin-bottom:10px">' +
+        '当前口令：<b id="qqtok" style="font-size:16px;letter-spacing:.6px;word-break:break-all">未读取</b>' +
+        '<div style="font-size:11px;opacity:.6;margin-top:4px" id="qqfrom"></div>' +
+      '</div>' +
+      btn('bqshow','显示口令','#0f766e') +
+      btn('bqcopy','复制','#64748b') +
+      btn('bqreset','重置（换新口令）','#b91c1c') +
+      '<div id="r4" style="margin-top:10px;font-size:13px;min-height:22px"></div>') +
+    card('3. 改管理员密码',
       '<input id="np" type="password" placeholder="新管理员密码（至少 6 位）" ' +
         'style="padding:9px 11px;border:1px solid #d0d5dd;border-radius:8px;font:inherit;width:220px">' +
       btn('badmin','保存','#0f766e') +
       '<div id="r2" style="margin-top:8px;font-size:13px;min-height:22px"></div>') +
-    card('3. 上传资料到文库',
+    card('4. 上传资料到文库',
       '<div style="font-size:12px;opacity:.8;line-height:1.7;margin-bottom:8px">' +
       '上传到 <code>lib/</code>。<br>⚠️ <b>目前索引里只有教材</b>——教材以外的资料<b>故意不建索引</b>' +
       '（涉版权，回答时可参考但不展示、不引用），所以上传了也不会显示，这是设计如此。</div>' +
@@ -822,6 +834,49 @@ function bindAdmin(w, salt, pw){
   if(g) g.addEventListener('click', function(){ act('gen'); });
   if(l) l.addEventListener('click', function(){ act('lock'); });
   if(o) o.addEventListener('click', function(){ act('open'); });
+  /* ---- 2. 班群口令（显示 / 复制 / 重置）----
+     口令存云端私密库，页面上只发动作、不落任何本地存储。 */
+  async function qqAct(act){
+    set('r4', '处理中…', '#667085');
+    var r = null;
+    try{ r = await window.callCloud(act, {pw: pw, salt: salt}); }catch(e){ r = null; }
+    return r;
+  }
+  function qqPaint(r, okText){
+    var el = d.getElementById('qqtok'), fr = d.getElementById('qqfrom');
+    if(r && r.ok){
+      if(el) el.textContent = r.token || '（空）';
+      if(fr) fr.textContent = (r.from === 'env')
+        ? '来源：云端环境变量（还没在后台重置过）' : '来源：私密库';
+    }
+    if(okText) set('r4', okText, '#059669');
+  }
+  var bqs = d.getElementById('bqshow');
+  if(bqs) bqs.addEventListener('click', async function(){
+    var r = await qqAct('qqshow');
+    if(r && r.ok){ qqPaint(r); set('r4', '已读取。'); }
+    else set('r4', '失败：' + ((r && r.msg) || '云端没响应'), '#b91c1c');
+  });
+  var bqc = d.getElementById('bqcopy');
+  if(bqc) bqc.addEventListener('click', async function(){
+    var el = d.getElementById('qqtok');
+    var t = el ? String(el.textContent || '').trim() : '';
+    if(!t || t === '未读取' || t === '处理中…'){
+      var r0 = await qqAct('qqshow');
+      if(!(r0 && r0.ok)){ set('r4', '先点「显示口令」', '#b91c1c'); return; }
+      qqPaint(r0); t = r0.token || '';
+    }
+    try{ await navigator.clipboard.writeText(t); set('r4', '已复制到剪贴板：' + t, '#059669'); }
+    catch(e){ set('r4', '这个浏览器不给复制，请手动选中：' + t, '#b91c1c'); }
+  });
+  var bqr = d.getElementById('bqreset');
+  if(bqr) bqr.addEventListener('click', async function(){
+    if(!confirm('重置后旧口令立即失效，班里要重新通知。确定吗？')) return;
+    var r = await qqAct('qqreset');
+    if(r && r.ok) qqPaint(r, '已重置。新口令发到班群即可：' + r.token);
+    else set('r4', '失败：' + ((r && r.msg) || '云端没响应'), '#b91c1c');
+  });
+
   var ba = d.getElementById('badmin');
   if(ba) ba.addEventListener('click', async function(){
     var n = d.getElementById('np').value;
@@ -1254,14 +1309,36 @@ async function headSpan(d, bytes=30000){
   return await fetchRange(d.f, 0, Math.min(d.n, end));
 }
 
+/* ============ 聊天区「自动跟随」策略（2026-10-07 修）============
+   🔴 原先的问题：工具轨迹、打字机、新增气泡全都无条件 scrollTop = scrollHeight。
+     其中打字机是**每一帧**滚一次（requestAnimationFrame），于是回答一边输出、
+     用户一边往上翻，每 16 毫秒就被拽回底部——完全看不了已输出的内容。
+   ✅ 现在改成：只有用户本来就贴在底部时才跟随。
+     用户手动上滑 → 立刻停止跟随（安静看）；滚回底部 → 自动恢复跟随。
+     换会话/清屏这类"该回到底部"的场景，显式调 autoScroll(true) 复位。 */
+let _stick = true;
+function _chatRoot(){ return document.getElementById("chat"); }
+function _nearBottom(c, tol){
+  return (c.scrollHeight - c.scrollTop - c.clientHeight) <= (tol == null ? 60 : tol);
+}
+function autoScroll(force){
+  const c = _chatRoot();
+  if(!c) return;
+  if(!c.__stickBound){
+    c.__stickBound = true;
+    c.addEventListener("scroll", function(){ _stick = _nearBottom(c); }, {passive:true});
+  }
+  if(force === true) _stick = true;
+  if(_stick) c.scrollTop = c.scrollHeight;
+}
+
 /* ============ 提问 ============ */
 function addMsg(who, html, cls){
   const rec = {who, html, cls: cls||"",
                text: String(html).replace(/<[^>]*>/g,"")};
   SS.push(rec);
   const bub = paintMsg(rec);
-  const c = document.getElementById("chat");
-  if(c) c.scrollTop = c.scrollHeight;
+  autoScroll();
   return bub;
 }
 const esc = s => s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -1327,6 +1404,7 @@ async function ask(opt){
     const mini = atts.map(a=>a.kind==="image"
         ? `<img src="${a.data}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid var(--line);margin:6px 6px 0 0">`
         : `<span style="display:inline-block;font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:6px 6px 0 0">📄 ${esc(a.name)}</span>`).join("");
+    autoScroll(true);   /* 主动发问：复位跟随，保证能看到自己的问题和后续回答 */
     addMsg("我", esc(q) + (mini?`<div>${mini}</div>`:""), "me");
     if(atts.length) TOOLS.clear();
   }
@@ -1638,7 +1716,7 @@ function typeInto(el, text, rate){
     const dt = ts - st.last; st.last = ts;
     st.shown = Math.min(st.full.length, st.shown + cps*dt/1000);
     el.textContent = st.full.slice(0, Math.floor(st.shown));
-    const c = document.getElementById("chat"); if(c) c.scrollTop = 1e9;
+    autoScroll();          /* 跟随策略见 autoScroll()：用户上滑即停，别每帧拽回去 */
     if(st.shown < st.full.length) requestAnimationFrame(step);
     else st.running = false;
   };
@@ -2176,7 +2254,7 @@ function renderChat(){
     return;
   }
   for(const rec of s.msgs) paintMsg(rec);
-  c.scrollTop = c.scrollHeight;
+  autoScroll(true);      /* 切换/恢复会话：该回到底部，显式复位跟随 */
 }
 
 function renderSession(){
@@ -2885,8 +2963,7 @@ function showChat(){
   document.getElementById("reader").style.display = "none";
   document.getElementById("chat").style.display = "block";
   document.getElementById("bar").style.display = "block";
-  const c = document.getElementById("chat");
-  c.scrollTop = c.scrollHeight;
+  autoScroll(true);      /* 从阅读面板回到对话：回到底部并复位跟随 */
 }
 function openDoc(d){
   showReader();
