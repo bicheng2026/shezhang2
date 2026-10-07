@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>自助部署指南 · 蛇杖二号</title>
+<style>
+  :root{ --bg:#0e1518; --bg2:#151f23; --card:#19252a; --line:#2b3b41;
+         --ink:#e3eef0; --dim:#8ba0a7; --teal:#5ad1c0; --warn:#e0a94a; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+        font:15px/1.85 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+        padding:0 0 60px; }
+  .wrap{ max-width:760px; margin:0 auto; padding:20px 18px 0; }
+  .legalbar{ position:sticky; top:0; z-index:5; padding:7px 14px; text-align:center;
+             font-size:11.5px; color:var(--warn); background:rgba(224,169,74,.12);
+             border-bottom:1px solid rgba(224,169,74,.3); backdrop-filter:blur(6px); }
+  h1{ font-size:21px; color:var(--teal); letter-spacing:2px; margin:22px 0 4px; }
+  h2{ font-size:16.5px; color:var(--teal); margin:30px 0 10px;
+      padding-bottom:7px; border-bottom:1px solid var(--line); letter-spacing:.5px; }
+  h3{ font-size:14.5px; color:var(--ink); margin:18px 0 6px; }
+  p{ margin:8px 0; }
+  ul,ol{ margin:8px 0; padding-left:22px; }
+  li{ margin:5px 0; }
+  table{ width:100%; border-collapse:collapse; margin:10px 0 4px; font-size:13.5px; }
+  th,td{ border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th{ background:var(--bg2); color:var(--teal); font-weight:600; white-space:nowrap; }
+  tr:nth-child(even) td{ background:rgba(255,255,255,.015); }
+  code{ background:var(--bg2); border:1px solid var(--line); border-radius:5px;
+        padding:1px 5px; font-size:13px; color:var(--teal); word-break:break-all; }
+  pre{ background:var(--bg2); border:1px solid var(--line); border-radius:9px;
+       padding:12px 14px; overflow-x:auto; font-size:13px; line-height:1.7; }
+  pre code{ background:none; border:0; padding:0; color:var(--ink); }
+  blockquote{ margin:12px 0; padding:10px 13px; background:var(--card);
+              border-left:3px solid var(--teal); border-radius:0 8px 8px 0;
+              color:var(--dim); font-size:13.5px; }
+  .foot{ margin-top:34px; padding-top:16px; border-top:1px dashed var(--line);
+         color:var(--dim); font-size:12px; line-height:1.9; }
+  a{ color:var(--teal); }
+  .back{ display:inline-block; margin-top:18px; margin-right:8px; padding:9px 16px; border-radius:9px;
+         border:1px solid var(--line); color:var(--teal); text-decoration:none; font-size:13.5px; }
+  .back:hover{ border-color:var(--teal); }
+</style>
+</head>
+<body>
+<div class="legalbar">仅作学术交流，不做商用</div>
+<div class="wrap">
+<h1>自助部署指南 · 给你们班也搭一个</h1>
+<blockquote>这份文档写给<b>想自己搭一套的班级</b>（班长或懂点电脑的同学）。</blockquote>
+<blockquote>全程零成本，不需要买服务器、不需要买域名、不需要备案。</blockquote>
+<blockquote>更新：2026-10-07</blockquote>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>免责声明</h2>
+<p><b>本工具仅作学术交流与个人学习使用，不做任何商业用途。</b></p>
+<p>教材与资料的版权归原出版社、原作者所有。请通过正规渠道购买、支持正版。</p>
+<p>因使用本工具产生的任何后果，由使用者自行承担。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>〇、先说清楚这是个什么东西</h2>
+<p>一句话：<b>一座你们班自己的教材库，加一个会自己查书的 AI Agent。</b></p>
+<p>分三块，可以只做第一块：</p>
+<table>
+<tr><th>块</th><th>是什么</th><th>必须吗</th></tr>
+<tr><td><b>① 文库站</b></td><td>网页版教材库 + AI 问答</td><td><b>必须</b>，本指南主讲</td></tr>
+<tr><td>② 公告聚合</td><td>自动抓学校官网通知，做成待办清单</td><td>可选</td></tr>
+<tr><td>③ 群消息收录</td><td>把群里值得留意的通知收进来</td><td>可选，<b>且必须守住隐私红线</b></td></tr>
+</table>
+<p><b>⚠️ 最重要的一点：这是一个 Agent，不是普通问答机器人。</b></p>
+<p>同学提问后，它会<b>自己决定去查哪几本书、要不要再查一轮</b>，然后带着出处回答。</p>
+<p>所以你会看到它「先动几下才回答」——那是在翻书。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>一、你要准备什么</h2>
+<p><b>三样，全部免费：</b></p>
+<table>
+<tr><th>要什么</th><th>干什么用</th><th>去哪弄</th></tr>
+<tr><td><b>GitHub 账号</b></td><td>代码和资料放这，Pages 免费托管网页</td><td>github.com 注册</td></tr>
+<tr><td><b>AI 接口的 API Key</b></td><td>让 AI 能回答问题（<b>每位同学各填各的</b>）</td><td>见第二节</td></tr>
+<tr><td>电脑（Windows 即可）</td><td>往仓库传资料时用</td><td>—</td></tr>
+</table>
+<p><b>不需要</b>：服务器、域名、备案、数据库、任何付费服务。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>二、AI 从哪来（关键，务必读懂）</h2>
+<p><b>这一站本身不含任何 API Key。</b> 这是刻意设计的：</p>
+<ul>
+<li>Key 由<b>每位使用者自己在浏览器里填</b>，存在自己电脑上，不上传、不进仓库</li>
+<li>站长不用替全班出钱，也不承担保管义务</li>
+</ul>
+<p><b>推荐两家（都有免费额度）：</b></p>
+<table>
+<tr><th>平台</th><th>接口地址填什么</th><th>模型名填什么</th><th>备注</th></tr>
+<tr><td><b>DeepSeek</b></td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-chat</code></td><td>新号常送额度，便宜</td></tr>
+<tr><td><b>硅基流动</b></td><td><code>https://api.siliconflow.cn/v1</code></td><td><code>Qwen/Qwen2.5-7B-Instruct</code></td><td>有若干<b>免费</b>模型</td></tr>
+</table>
+<p><b>怎么拿到 Key</b>：注册平台 → 找到「API Keys」→ 新建 → 复制那串 <code>sk-…</code>。</p>
+<p><b>同学怎么填</b>：打开网站 → 右上角 <b>设置</b> → 填三格（接口地址 / API Key / 模型名）→ 保存 → 回对话页提问。</p>
+<blockquote>不填也能用：文库能翻、公告能看，只是<b>问 AI 不会回答</b>。</blockquote>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>三、十分钟搭好最小可用版</h2>
+<h3>Step 1 · 建仓库</h3>
+<ol>
+<li>登录 GitHub，点右上角 <b>+</b> → <b>New repository</b></li>
+<li>名字随意，比如 <code>class-library</code></li>
+<li>勾 <b>Public</b>（私有仓库的 Pages 要收费）</li>
+<li>点 <b>Create repository</b></li>
+</ol>
+<h3>Step 2 · 把这一套文件传上去</h3>
+<p>把上一任站长给你的整套目录传进仓库。命令行方式（在项目目录里执行）：</p>
+<pre><code>
+git init
+git add .
+git commit -m &quot;init&quot;
+git branch -M main
+git remote add origin https://github.com/&lt;你的用户名&gt;/&lt;仓库名&gt;.git
+git push -u origin main
+</code></pre>
+<blockquote><b>如果 <code>git push</code> 老是失败</b>（学校网常见），可以改用 GitHub 网页版「Add file → Upload files」手动传；</blockquote>
+<blockquote>文件多的话建议分批传，别一次拖几百兆。</blockquote>
+<h3>Step 3 · 开启网页托管（Pages）</h3>
+<ol>
+<li>仓库页 → <b>Settings</b> → 左侧 <b>Pages</b></li>
+<li>Source 选 <b>Deploy from a branch</b></li>
+<li>Branch 选 <b>main</b> / 目录选 <b>/ (root)</b> → <b>Save</b></li>
+<li>等 1–3 分钟，访问 <code>https://&lt;你的用户名&gt;.github.io/&lt;仓库名&gt;/</code></li>
+</ol>
+<p><b>能打开登录页 = 成功。</b></p>
+<h3>Step 4 · 设访问口令（建议）</h3>
+<p>配置文件是 <code>网页版/data/access.json</code>：</p>
+<pre><code>
+{
+  &quot;lock&quot;: true,
+  &quot;salt&quot;: &quot;自己换一串随机字符&quot;,
+  &quot;admin&quot;: &quot;管理员密码的哈希值&quot;,
+  &quot;user&quot;: &quot;&quot;,
+  &quot;temp&quot;: false,
+  &quot;issuedAt&quot;: 0,
+  &quot;until&quot;: 0
+}
+</code></pre>
+<ul>
+<li><code>lock: true</code> = 需要口令才能进；<code>false</code> = 任何人可进</li>
+<li><b><code>admin</code> 存的是哈希，不是明文</b>：<code>SHA-256(salt + "::" + 你的密码)</code>，可用下面这段算：</li>
+</ul>
+<pre><code>
+import hashlib
+salt = &quot;换成你 access.json 里的 salt&quot;
+pw   = &quot;你想用的管理员密码&quot;
+print(hashlib.sha256((salt + &quot;::&quot; + pw).encode()).hexdigest())
+</code></pre>
+<p>把输出填进 <code>admin</code>，明文自己记好（别写进仓库）。</p>
+<ul>
+<li>进后台：网页上按 <b>Ctrl + Shift + A</b>，输管理员密码</li>
+</ul>
+<h3>Step 5 · 让同学能提问</h3>
+<p>把第二节的「怎么填 Key」发到班群。完事。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>四、把资料收进文库（入库）</h2>
+<h3>4.1 先理解结构</h3>
+<pre><code>
+网页版/lib/             ← 正文（markdown）
+  ├─ 00_待入库/
+  ├─ 01_教材/           ← 侧边栏只列这里的
+  ├─ 02_课件题库/
+  ├─ 03_学科/
+  └─ 04_校务公开/
+网页版/data/index.json  ← 索引（章节标题 + 字节偏移），由脚本生成
+网页版/data/crypto.json ← 加密标记（有这个文件就说明 lib 是密文）
+</code></pre>
+<p><b>索引只认 <code>.md</code>。</b> PDF / PPT / Word 要先转成 markdown。</p>
+<h3>4.2 入库三步</h3>
+<pre><code>
+# ① 如果 lib 已经是密文，先还原成明文（复制 data/crypto.json 在就说明是密文）
+python web/decrypt_all.py
+
+# ② 把资料转成 md 放进 lib/&lt;分类&gt;/（转换用 web/extract.py，支持 PDF/PPT/DOCX/图片）
+
+# ③ 重建索引 → 重新加密
+python web/build_index.py
+python web/encrypt_all.py
+</code></pre>
+<p><b>markdown 格式要求</b>（影响能不能被搜到）：</p>
+<pre><code>
+# 书名                        ← 第一个 # 是书名
+
+## 第一章 绪论                 ← ## 是章节标题，索引按它切
+正文…
+
+## 第二章 …
+</code></pre>
+<ul>
+<li>没有 <code>##</code> 的文档，整篇算一章（不会丢）</li>
+<li>偏移量按 <b>UTF-8 字节</b>算，中文一个字 3 字节——<b>别手工改，交给脚本</b></li>
+</ul>
+<h3>4.3 加密是怎么回事（可选但建议）</h3>
+<p><code>encrypt_all.py</code> 会把 <code>lib/*.md</code> 和 <code>index.json</code> <b>原地加密</b>（AES-256-CTR，密文与明文等长）。</p>
+<p>这样公开仓库上只放着密文，别人拿到文件也读不出内容。</p>
+<ul>
+<li>密钥来自 <code>web/sz_crypto.py</code> 里的口令+盐 —— <b>改成你们自己的</b></li>
+<li>加密后 <code>data/crypto.json</code> 会出现，是「已加密」标记</li>
+<li><b>下次改资料前必须先 <code>decrypt_all.py</code></b>，否则新内容会混进密文里</li>
+</ul>
+<h3>4.4 推上去</h3>
+<pre><code>
+cd 网页版
+node deploy.mjs index.html data/index.json     # 只推指定文件
+</code></pre>
+<blockquote>本项目自带的 <code>deploy.mjs</code> 走 GitHub API 直传，不依赖 <code>git push</code>，</blockquote>
+<blockquote>对付校园网不稳特别管用。首次用前把里面的 <code>REPO</code> 改成你的仓库。</blockquote>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>五、（进阶）想直接看原版 PDF 带插图？</h2>
+<p>markdown 只有文字，<b>图全丢了</b>。想看原版 PDF 有个现实问题：</p>
+<p><b>PDF 很大，塞不进主仓库。</b> 举例：50 册教材原本 <b>3.6 GB</b>，而：</p>
+<table>
+<tr><th>限制</th><th>上限</th></tr>
+<tr><td>GitHub 单文件</td><td>100 MB（超了直接拒收）</td></tr>
+<tr><td>仓库 / Pages 站点</td><td>1 GB 软限（超了可能构建失败）</td></tr>
+</table>
+<p><b>两个可行做法：</b></p>
+<p><b>做法 A：压缩后再放</b></p>
+<p>用 PyMuPDF 重压内嵌插图（文字层保留）：</p>
+<pre><code>
+import pymupdf
+d = pymupdf.open(&quot;原书.pdf&quot;)
+d.rewrite_images(dpi_threshold=150, dpi_target=120, quality=75)
+d.subset_fonts()
+d.save(&quot;压后.pdf&quot;, garbage=4, deflate=True, clean=True)
+</code></pre>
+<p>实测 417 MB → 88 MB（<b>4.7 倍</b>），标题正文二维码都清晰，只有插图略柔和。</p>
+<p><b>做法 B（推荐）：拆到独立仓库</b></p>
+<p>再建一个仓库专门放 PDF，开它自己的 Pages，等于<b>再拿一份 1 GB 额度</b>，主站不受影响。</p>
+<p>页面里用绝对地址引用即可：</p>
+<pre><code>
+var PDFBASE = &quot;https://&lt;你的用户名&gt;.github.io/&lt;pdf仓库名&gt;/pdf/&quot;;
+</code></pre>
+<p>本项目里对应 <code>index.html</code> 的 <code>PDFBASE</code> 和 <code>web/shrink_pdf.py</code>、<code>web/push_pdf.py</code> 两个脚本。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>六、隐私红线（不可协商）</h2>
+<p>如果你们也要收<b>群消息</b>，请先读这段：</p>
+<blockquote><b>群聊内容只落本机，绝不推进任何公开仓库。</b></blockquote>
+<p>具体做法：</p>
+<ol>
+<li>班群消息<b>不要</b>放进公开站的 <code>data/</code> 目录</li>
+<li>要给人看，就放在<b>私密仓库</b>或云函数的<b>口令页</b>（需口令才能读）</li>
+<li>收录前必须脱敏：<b>姓名、学号、手机号、身份证号</b>全去掉</li>
+<li>公开的仓库配置里加一条「红线自检」，防止手滑：</li>
+</ol>
+<ul>
+<li>本项目 <code>网页版/.github/workflows/sync-todo.yml</code> 里有一段示例逻辑</li>
+</ul>
+<p><b>为什么这么严</b>：GitHub Pages 是全网可读的，搜索引擎也会抓。</p>
+<p>班级群里的名字+学号一旦上网，是真实事故，不是吓唬人。</p>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>七、常见的坑</h2>
+<table>
+<tr><th>现象</th><th>原因</th><th>怎么办</th></tr>
+<tr><td>部署完还是旧版</td><td>GitHub Pages 有 <b>10 分钟 CDN 缓存</b></td><td>等一会儿，或 URL 加 <code>?t=时间戳</code> 强刷</td></tr>
+<tr><td>页面空白</td><td>索引没生成 / 没推上去</td><td>跑 <code>build_index.py</code>，确认 <code>data/index.json</code> 在</td></tr>
+<tr><td>问 AI 没反应</td><td><b>没填 API Key</b></td><td>设置里填三格，保存</td></tr>
+<tr><td>手机上好用、电脑上不行</td><td>浏览器缓存了旧 Service Worker</td><td>Ctrl+F5 强刷</td></tr>
+<tr><td><code>git push</code> 一直失败</td><td>校园网 TLS 不稳</td><td>改用 <code>node deploy.mjs</code>（走 API 直传）</td></tr>
+<tr><td>加密后改不动资料</td><td>lib 是密文</td><td>先 <code>python web/decrypt_all.py</code> 还原</td></tr>
+<tr><td>侧边栏列出一堆看不懂的</td><td>索引里混进了非教材</td><td>侧边栏按 <code>01_教材/</code> 过滤（见 <code>buildSidebar</code>）</td></tr>
+</table>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<h2>八、验收清单</h2>
+<p>搭完自己走一遍：</p>
+<ul>
+<li>[ ] 打开网址能看到登录页</li>
+<li>[ ] 输口令能进去</li>
+<li>[ ] 侧边栏能看到书</li>
+<li>[ ] 点书能打开阅读</li>
+<li>[ ] 设置里填 Key 后能问出答案</li>
+<li>[ ] 答案下方有「引用对照」卡，<code>〔1〕</code> 能对应到具体书名</li>
+<li>[ ] 手机上打开排版正常</li>
+<li>[ ] <code>data/access.json</code> 里<b>没有</b>明文密码</li>
+<li>[ ] 公开仓库里<b>没有</b>任何班级群消息、姓名、学号</li>
+</ul>
+<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+<p>_仅作学术交流，不做商用。教材版权归原出版社所有，请支持正版。_</p>
+<a class="back" href="./help.html">← 返回使用说明</a>
+<a class="back" href="./index.html">回到文库</a>
+</div>
+</body>
+</html>
