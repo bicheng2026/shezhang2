@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>蛇杖二号 · 使用说明</title>
+<style>
+  :root{ --bg:#0e1518; --bg2:#151f23; --card:#19252a; --line:#2b3b41;
+         --ink:#e3eef0; --dim:#8ba0a7; --teal:#5ad1c0; --warn:#e0a94a; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink);
+        font:15px/1.85 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+        padding:0 0 60px; }
+  .wrap{ max-width:760px; margin:0 auto; padding:20px 18px 0; }
+  .legalbar{ position:sticky; top:0; z-index:5; padding:7px 14px; text-align:center;
+             font-size:11.5px; color:var(--warn); background:rgba(224,169,74,.12);
+             border-bottom:1px solid rgba(224,169,74,.3); backdrop-filter:blur(6px); }
+  h1{ font-size:21px; color:var(--teal); letter-spacing:2px; margin:22px 0 4px; }
+  .sub{ color:var(--dim); font-size:12.5px; margin:0 0 22px; }
+  h2{ font-size:16.5px; color:var(--teal); margin:30px 0 10px;
+      padding-bottom:7px; border-bottom:1px solid var(--line); letter-spacing:.5px; }
+  h3{ font-size:14.5px; color:var(--ink); margin:18px 0 6px; }
+  p{ margin:8px 0; }
+  ul,ol{ margin:8px 0; padding-left:22px; }
+  li{ margin:4px 0; }
+  table{ width:100%; border-collapse:collapse; margin:10px 0 4px; font-size:13.5px; }
+  th,td{ border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th{ background:var(--bg2); color:var(--teal); font-weight:600; white-space:nowrap; }
+  tr:nth-child(even) td{ background:rgba(255,255,255,.015); }
+  code{ background:var(--bg2); border:1px solid var(--line); border-radius:5px;
+        padding:1px 5px; font-size:13px; color:var(--teal); }
+  .note{ background:var(--card); border-left:3px solid var(--teal); border-radius:0 8px 8px 0;
+         padding:10px 13px; margin:12px 0; font-size:13.5px; color:var(--dim); }
+  .warnbox{ background:rgba(192,57,43,.10); border-left:3px solid #c0392b; border-radius:0 8px 8px 0;
+            padding:11px 14px; margin:16px 0; font-size:13.5px; }
+  .pager{ color:var(--dim); font-size:12px; margin-top:6px; }
+  .foot{ margin-top:34px; padding-top:16px; border-top:1px dashed var(--line);
+         color:var(--dim); font-size:12px; line-height:1.9; }
+  a{ color:var(--teal); }
+  .back{ display:inline-block; margin-top:18px; padding:9px 16px; border-radius:9px;
+         border:1px solid var(--line); color:var(--teal); text-decoration:none; font-size:13.5px; }
+  .back:hover{ border-color:var(--teal); }
+</style>
+</head>
+<body>
+<div class="legalbar">仅作学术交流，不做商用 ｜ 教材与资料版权归原出版社所有，请支持正版</div>
+<div class="wrap">
+
+  <h1>蛇杖二号 · 使用说明</h1>
+  <p class="sub">临床医学教材库 ＋ 会查书的 AI ｜ 更新 2026-10-07</p>
+
+  <div class="warnbox">
+    <b>免责声明</b><br>
+    本工具<b>仅作学术交流与个人学习使用，不做任何商业用途</b>。
+    教材与各类资料的版权归原出版社、原作者所有，本库只是把已有资料做了检索便利化处理，
+    <b>请通过正规渠道购买、支持正版</b>。因使用本工具产生的任何后果，由使用者自行承担。
+  </div>
+
+  <h2>一、这是个什么东西</h2>
+  <p>一座<b>临床医学教材库</b>，加一个会查书的 AI。</p>
+  <ul>
+    <li>底子是 <b>50 册教材</b>（人卫版为主）的原文</li>
+    <li>你提问 → AI 自己去库里翻原文 → 带着出处回答</li>
+    <li>回答里每个关键结论都带角标，<b>最下方那张「引用对照」卡就是它的字典</b></li>
+  </ul>
+  <p><b>它能干</b>：概念讲解、复习备考、病例分析思路、实验报告、资料整理、出题练习、列背书大纲。<br>
+     <b>它不能干</b>：代替医生诊断，代替现行指南，代替你自己读书。</p>
+
+  <h2>二、怎么开始用</h2>
+  <ol>
+    <li>打开网址，输入访问密码（班长发的那个）</li>
+    <li>在下方输入框打字，按 <code>Enter</code> 发送（<code>Shift+Enter</code> 换行）</li>
+    <li>等它回答。<b>你会先看到它「查了什么」，再看到答案</b>——这是故意的，方便判断它有没有认真查</li>
+  </ol>
+  <div class="note">第一次打开要等十几秒载入文库索引（1.6 MB 密文要在浏览器里解密），属正常，之后就快了。</div>
+
+  <h2>三、顶部的按钮</h2>
+  <table>
+    <tr><th>按钮</th><th>干什么</th></tr>
+    <tr><td><b>☰</b>（手机上）</td><td>拉开侧边栏，选教材</td></tr>
+    <tr><td><b>会话</b></td><td>看历史对话。可以「新建会话」，也能「清空全部」</td></tr>
+    <tr><td><b>记忆</b></td><td>长期记住的东西（比如"我在准备四级"）。可手动加、可清空</td></tr>
+    <tr><td><b>设置</b></td><td>填接口与 Key、换模型、调打字速度、开识图模型</td></tr>
+    <tr><td><b>📚 文库</b></td><td>回到总览首页</td></tr>
+    <tr><td><b>📲 安装</b></td><td>把网页装成手机 App（安卓 Chrome / 桌面 Chrome 支持）</td></tr>
+    <tr><td><b>待办</b></td><td>打开抽屉：官网公告 ＋ 班群摘要（见第八节）</td></tr>
+    <tr><td><b>? 用法</b></td><td>就是本页</td></tr>
+  </table>
+  <p class="pager">管理员另有：<code>Ctrl + Shift + A</code> 打开管理后台。</p>
+
+  <h2>四、输入框这一排</h2>
+  <table>
+    <tr><th>按钮</th><th>干什么</th></tr>
+    <tr><td><b>📎 上传</b></td><td>传图片或文本文件。图片能让 AI 看图（需在设置里配识图模型）；文本会把内容一起送进去</td></tr>
+    <tr><td><b>🌐 联网</b></td><td>打开后 AI 能上网查最新的指南、新闻。<b>教材结论永远优先</b>，联网只补时效</td></tr>
+    <tr><td><b>💭 深度思考</b></td><td>打开后模型先推理再作答，适合难题。会慢一些、费一些额度</td></tr>
+    <tr><td><b>发送</b></td><td>和按 Enter 一样</td></tr>
+  </table>
+
+  <h2>五、左边的侧边栏</h2>
+  <ul>
+    <li><b>搜索框</b>：输入书名或章节名，实时过滤</li>
+    <li><b>书目列表</b>：目前只列<b>教材</b>（50 册）。课件、学科资料、图片那些<b>不在侧栏显示</b>，但检索时照样能查到</li>
+    <li><b>点书名</b>：打开阅读面板，可按章节读原文</li>
+  </ul>
+
+  <h2>六、答案下方那一排</h2>
+  <table>
+    <tr><th>按钮</th><th>干什么</th></tr>
+    <tr><td><b>📄 导出 PDF</b></td><td>把这条回答存成 PDF</td></tr>
+    <tr><td><b>📝 导出 Word</b></td><td>存成 Word</td></tr>
+    <tr><td><b>🧩 生成示意图</b></td><td>让 AI 把这条回答画成图（读的是文库原文，比普通绘图准）</td></tr>
+    <tr><td><b>❓ 据此出题</b></td><td>就着这条回答出练习题</td></tr>
+    <tr><td><b>📚 据此处大纲</b></td><td>就着这条回答整理成背书大纲</td></tr>
+    <tr><td><b>🔁 换端点</b></td><td>把同一个问题发到备用接口（主接口抽风时用）</td></tr>
+    <tr><td><b>✎ 改写重问</b></td><td>把问题改写成中性问法再问一遍（换个角度）</td></tr>
+  </table>
+
+  <h2>七、回答里的角标怎么读</h2>
+  <p>AI 会标三种角标，<b>答案最下方那张「📎 引用对照」卡就是它们的字典</b>：</p>
+  <table>
+    <tr><th>角标</th><th>意思</th><th>卡片里给什么</th></tr>
+    <tr><td>〔1〕〔2〕…</td><td><b>教材原文</b></td><td>书名 · 章节</td></tr>
+    <tr><td>〔网1〕〔网2〕…</td><td><b>联网查到</b>的</td><td>来源 · 标题</td></tr>
+    <tr><td>〔待办1〕〔待办2〕…</td><td><b>学校 / 图书馆公告</b></td><td>标题 · 截止日期 · <b>「原文 ↗」可点</b></td></tr>
+  </table>
+  <div class="note">看到「原文 ↗」就点它——直接跳到学校官网那条公告。</div>
+
+  <h2>八、待办抽屉（顶部「待办」）</h2>
+  <h3>① 公告与待办</h3>
+  <p>学校官网、图书馆、教务处的通知，按截止日排。<b>纯公开信息</b>，可以转给同学。</p>
+  <h3>② 班群摘要</h3>
+  <p>班群里值得留意的通知（已去掉姓名 / 学号 / 手机号）。</p>
+  <p>群聊内容涉及同学隐私，<b>不放公开网页</b>——所以这里要<b>输入班群口令</b>，
+     然后打开云端页面查看。口令问班长要。</p>
+
+  <h2>九、斜杠命令（在输入框里打）</h2>
+  <table>
+    <tr><th>命令</th><th>作用</th></tr>
+    <tr><td><code>/think</code></td><td>深度思考 开 / 关</td></tr>
+    <tr><td><code>/net</code></td><td>联网参考 开 / 关</td></tr>
+    <tr><td><code>/quiz 主题</code></td><td>进入出题模式（点标签退出）</td></tr>
+    <tr><td><code>/outline 主题</code></td><td>整理记忆大纲</td></tr>
+    <tr><td><code>/draw 描述</code></td><td>AI 绘图（需在设置里配图像接口）</td></tr>
+    <tr><td><code>/help</code></td><td>显示命令说明</td></tr>
+  </table>
+  <p class="pager">不认识的 <code>/</code> 开头内容，会当普通问题照常提问。</p>
+
+  <h2>十、快捷键</h2>
+  <table>
+    <tr><th>按键</th><th>作用</th></tr>
+    <tr><td><code>Enter</code></td><td>发送</td></tr>
+    <tr><td><code>Shift + Enter</code></td><td>换行</td></tr>
+    <tr><td><code>Ctrl + Shift + A</code></td><td>管理员后台（仅管理员）</td></tr>
+  </table>
+
+  <h2>十一、常见问题</h2>
+  <h3>为什么第一次打开很慢？</h3>
+  <p>文库索引是加密的（1.6 MB），要在浏览器里解密，十几秒正常。</p>
+  <h3>它会不会瞎编？</h3>
+  <p>设计上要求「工具没返回的内容不许编」，查不到会直接说查不到。
+     但你仍应核对——尤其<b>剂量、诊断、数值</b>这类，一律以现行指南和医嘱为准。</p>
+  <h3>回答很慢 / 报错？</h3>
+  <p>可能接口在抽风。点答案下方的「🔁 换端点」，或到设置里换模型。</p>
+  <h3>手机上怎么装成 App？</h3>
+  <p>安卓 Chrome 打开网页 → 菜单 → 「添加到主屏幕」；桌面 Chrome 地址栏右侧也有安装图标。</p>
+  <h3>我能看到别的同学问过什么吗？</h3>
+  <p>不能。会话记录只存在你自己浏览器里。</p>
+  <h3>班群摘要是空的？</h3>
+  <p>先确认口令对不对。还是空，说明群里最近没有值得收录的通知（闲聊不收）。</p>
+
+  <h2>十二、还想要什么</h2>
+  <p>这个库是班长在维护。有想加的资料、想改的功能，或者发现它答错了、乱标出处了
+     —— 直接在班里说，比在群里吐槽管用。</p>
+
+  <div class="foot">
+    仅作学术交流，不做商用。教材版权归原出版社所有，请支持正版。<br>
+    蛇杖二号 · 临床医学原文知识库
+  </div>
+
+  <a class="back" href="javascript:window.close()">关闭本页</a>
+  <a class="back" href="./index.html">回到文库</a>
+
+</div>
+</body>
+</html>
