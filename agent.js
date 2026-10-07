@@ -34,9 +34,9 @@ const CFG = {
   const s = document.createElement("style");
   s.id = "sz2-agent-css";
   s.textContent = [
-    ".msg.tool .bubble{background:rgba(201,162,39,.08);border:1px solid rgba(201,162,39,.30);",
+    ".msg.tool .bubble{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);",
     "color:var(--dim);font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}",
-    ".msg.tool .who{color:#c9a227;font-size:12px}",
+    ".msg.tool .who{color:#3b82f6;font-size:12px}",
     ".msg.tool .bubble b{color:var(--teal);font-weight:600}"
   ].join("");
   document.head.appendChild(s);
