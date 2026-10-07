@@ -396,7 +396,9 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <button class="btn" onclick="newSession()">新建会话</button>
     <button class="close" onclick="closeSess()">关闭</button>
     <button class="close" onclick="SS.clearAll()">清空全部</button>
-    <div class="hint">会话保存在本机浏览器，换设备不同步。条数过多会占用浏览器存储，可随手删除。</div>
+    <div class="hint" id="sesstat" style="margin-top:10px">存储：正在检测…</div>
+    <div class="hint">会话保存在本机浏览器（IndexedDB 大仓，容量随磁盘走），换设备不同步。
+      重要内容建议用气泡下方的「导出 PDF / Word」留档。</div>
   </div>
 </div>
 
@@ -2358,63 +2360,327 @@ document.addEventListener("drop", e=>{
   }
 });
 
-/* ============ 会话历史（本机 localStorage 持久化）============ */
-const SS = {
-  K:"sz2_sessions", C:"sz2_cur", MAX:40, MSG_MAX:200,
-  list:[], curId:"",
-  load(){
-    try{ this.list = JSON.parse(localStorage.getItem(this.K)||"[]"); }catch(e){ this.list = []; }
-    if(!Array.isArray(this.list)) this.list = [];
-    this.curId = localStorage.getItem(this.C) || "";
-    if(!this.list.length) this.new_();
+/* ============ 会话历史（IndexedDB 主仓 + localStorage 兜底）============
+   🔴 2026-10-08 修「点开旧会话只显示一部分」。根因有两条，都是**静默丢数据**：
+      ① 全体会话挤在一个 localStorage 键里（浏览器上限约 5MB）。
+         一旦写满，旧代码的 catch 里就「从最旧的会话开始 pop 丢弃」；
+         若砍到只剩 1 个还写不进，就直接 return —— 本次新产生的消息**根本没落盘**。
+         下次点开那一会话，看到的是上一次侥幸写成功的旧快照，于是像被截断。
+      ② 单会话超过 MSG_MAX(200) 条就 shift() 掉最早一条，同样静默。
+   ✅ 现在：主仓换 IndexedDB（配额跟磁盘走，通常几百 MB 起），
+      一个会话一个键，只回写「脏」的那一个 + 一个极小的目录键；
+      localStorage 退化为无 IndexedDB 时的降级通道。
+      任何裁剪都不再静默：会在会话顶部插一条看得见的说明，并提示存储状态。 */
+
+/* —— IndexedDB 小封装（失败即降级，绝不抛到业务层） —— */
+const IDB = {
+  name:"sz2_sess", ver:1, store:"sess", db:null, bad:false,
+  open(){
+    if(this.db) return Promise.resolve(this.db);
+    if(this.bad || typeof indexedDB === "undefined") return Promise.reject(new Error("no-idb"));
+    return new Promise((res, rej)=>{
+      let rq;
+      try{ rq = indexedDB.open(this.name, this.ver); }
+      catch(e){ this.bad = true; return rej(e); }
+      rq.onupgradeneeded = ()=>{
+        const db = rq.result;
+        if(!db.objectStoreNames.contains(this.store)) db.createObjectStore(this.store);
+      };
+      rq.onsuccess = ()=>{ this.db = rq.result; res(this.db); };
+      rq.onerror   = ()=>{ this.bad = true; rej(rq.error || new Error("idb-open-fail")); };
+      rq.onblocked = ()=>{ this.bad = true; rej(new Error("idb-blocked")); };
+    });
   },
-  save(){
-    try{ localStorage.setItem(this.K, JSON.stringify(this.list)); }
-    catch(e){ /* 配额满：从最旧的会话开始丢弃 */
-      while(this.list.length > 1){
-        this.list.pop();
-        try{ localStorage.setItem(this.K, JSON.stringify(this.list)); return; }catch(_){}
+  async get(k){
+    const db = await this.open();
+    return await new Promise((res, rej)=>{
+      const rq = db.transaction(this.store, "readonly").objectStore(this.store).get(k);
+      rq.onsuccess = ()=>res(rq.result);
+      rq.onerror   = ()=>rej(rq.error);
+    });
+  },
+  async set(k, v){
+    const db = await this.open();
+    return await new Promise((res, rej)=>{
+      const tx = db.transaction(this.store, "readwrite");
+      tx.objectStore(this.store).put(v, k);
+      tx.oncomplete = ()=>res(true);
+      tx.onerror    = ()=>rej(tx.error || new Error("idb-write-fail"));
+      tx.onabort    = ()=>rej(tx.error || new Error("idb-abort"));
+    });
+  },
+  async del(k){
+    const db = await this.open();
+    return await new Promise((res, rej)=>{
+      const tx = db.transaction(this.store, "readwrite");
+      tx.objectStore(this.store).delete(k);
+      tx.oncomplete = ()=>res(true);
+      tx.onerror    = ()=>rej(tx.error || new Error("idb-del-fail"));
+      tx.onabort    = ()=>rej(tx.error || new Error("idb-abort"));
+    });
+  }
+};
+
+/* 落盘前瘦身：掉 text 字段（= html 去标签后的副本，随时能算回来，却占掉近一半体积） */
+function stripRec(r){
+  if(!r || typeof r !== "object") return r;
+  const o = {who:r.who, html:r.html, cls:r.cls};
+  if(r.ts) o.ts = r.ts;
+  return o;
+}
+const escAttr = s => String(s == null ? "" : s).replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+const SS = {
+  K:"sz2_sessions", C:"sz2_cur", MAX:60, MSG_MAX:800, SESS_MAXCHARS:2000000,
+  list:[], curId:"",
+  _useIdb:false, _dirty:null, _timer:null, _flushing:false,
+
+  /* —— 载入 —— */
+  async load(){
+    if(!this._dirty) this._dirty = new Set();
+    /* 3 秒读不出来就当没有，绝不把首屏卡死在这 */
+    const _to = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error("idb-timeout")), ms))]);
+    /* 先探一次 IndexedDB 在不在 —— 决定主仓还是降级，别等写到一半才发现走错门 */
+    try{ await _to(IDB.open(), 3000); this._useIdb = true; }
+    catch(e){ this._useIdb = false; }
+    let idx = null;
+    if(this._useIdb){ try{ idx = await _to(IDB.get("idx"), 3000); }catch(e){} }
+    if(this._useIdb && Array.isArray(idx) && idx.length){
+      this.list = idx.map(m => ({id:m.id, title:m.title || "新会话", ts:m.ts || Date.now(),
+                                 n:m.n | 0, msgs:null}));
+      this._useIdb = true;
+    }else{
+      /* 迁移：老数据在 localStorage 里，搬进 IndexedDB 后把它腾空 */
+      let old = [];
+      try{ old = JSON.parse(localStorage.getItem(this.K) || "[]"); }catch(e){ old = []; }
+      if(!Array.isArray(old)) old = [];
+      if(old.length){
+        this.list = old.map(s => ({id:s.id, title:s.title || "新会话", ts:s.ts || Date.now(),
+                                   n:Array.isArray(s.msgs) ? s.msgs.length : 0,
+                                   msgs:Array.isArray(s.msgs) ? s.msgs : []}));
+        if(this._useIdb){
+          try{
+            await IDB.set("idx", this.list.map(s => ({id:s.id, title:s.title, ts:s.ts,
+                                                      n:s.msgs ? s.msgs.length : (s.n || 0)})));
+            for(const s of this.list) await IDB.set("s:" + s.id, (s.msgs || []).map(stripRec));
+            try{ localStorage.removeItem(this.K); }catch(e){}   /* 搬完就把那 5MB 让出来 */
+          }catch(e){ this._useIdb = false; }
+        }
       }
     }
+    if(!this.list.length){ this.new_(); return; }
+    this.curId = localStorage.getItem(this.C) || "";
+    if(!this.list.some(s => s.id === this.curId)) this.curId = this.list[0].id;
+    await this.hydrate(this.curId);
   },
-  cur(){ return this.list.find(s=>s.id===this.curId) || this.new_(); },
-  new_(){
-    const s = {id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
-               title:"新会话", ts:Date.now(), msgs:[]};
-    this.list.unshift(s); this.curId = s.id;
-    localStorage.setItem(this.C, s.id); this.save();
+
+  /* 把某个会话的正文从仓里取出来（目录里只有元信息，正文按需加载） */
+  async hydrate(id){
+    const s = this.list.find(x => x.id === id);
+    if(!s) return null;
+    if(s.msgs) return s;
+    if(this._useIdb){
+      try{
+        const m = await Promise.race([IDB.get("s:" + id),
+          new Promise((_, rj) => setTimeout(() => rj(new Error("idb-timeout")), 4000))]);
+        s.msgs = Array.isArray(m) ? m : [];
+      }catch(e){ s.msgs = []; }
+    }else s.msgs = [];
+    s.n = s.msgs.length;
     return s;
   },
-  switchTo(id){
-    if(!this.list.some(s=>s.id===id)) return;
-    this.curId = id; localStorage.setItem(this.C, id); this.save();
-    renderChat(); renderSession();
+
+  /* —— 落盘（防抖：连续打字/流式输出不会每条都写一次） —— */
+  save(){
+    if(!this._dirty) this._dirty = new Set();
+    if(this._timer) clearTimeout(this._timer);
+    this._timer = setTimeout(() => { this.flush(); }, 400);
   },
-  del(id){
-    this.list = this.list.filter(s=>s.id!==id);
+  async flush(){
+    if(this._timer){ clearTimeout(this._timer); this._timer = null; }
+    if(this._flushing) return false;
+    this._flushing = true;
+    try{
+      const idx = this.list.map(s => ({id:s.id, title:s.title, ts:s.ts,
+                                       n:s.msgs ? s.msgs.length : (s.n || 0)}));
+      if(this._useIdb){
+        /* 写一次失败就永久降级太草率 —— 浏览器偶尔抽风一次不代表大仓不可用。
+           先原地重试一顿；真不行才降级，并且**告诉用户**，不再闷声换通道。 */
+        let tries = 0, wrote = false, lastErr = null;
+        while(tries < 2 && !wrote){
+          tries++;
+          try{
+            await IDB.set("idx", idx);
+            const ids = Array.from(this._dirty || []);
+            for(const id of ids){
+              const s = this.list.find(x => x.id === id);
+              if(s && s.msgs) await IDB.set("s:" + id, s.msgs.map(stripRec));
+            }
+            wrote = true;
+          }catch(e){
+            lastErr = e;
+            if(tries < 2) await new Promise(r => setTimeout(r, 300));
+          }
+        }
+        if(wrote){ this._dirty.clear(); return true; }
+        console.warn("[SS] IndexedDB 写入失败，降级为 localStorage：", lastErr);
+        this._useIdb = false;
+        this.warn("⚠️ 本机大仓写入失败，已临时改用小容量存储（约 5MB，写满会丢最早的会话）。"
+                + "多半是浏览器开了无痕/隐私模式 —— 换普通窗口重开本页即可恢复。");
+      }
+      /* 降级通道：localStorage。满了也不静默删 —— 会明说砍了几个 */
+      const payload = this.list.map(s => ({id:s.id, title:s.title, ts:s.ts,
+                                           msgs:(s.msgs || []).map(stripRec)}));
+      try{
+        localStorage.setItem(this.K, JSON.stringify(payload));
+        this._dirty.clear();
+        return true;
+      }catch(e){
+        let dropped = 0;
+        while(payload.length > 1){
+          payload.pop(); dropped++;
+          try{ localStorage.setItem(this.K, JSON.stringify(payload)); break; }catch(_){}
+        }
+        const keep = new Set(payload.map(s => s.id));
+        this.list = this.list.filter(s => keep.has(s.id));
+        if(this.list[0]){ this.curId = this.list[0].id; try{ localStorage.setItem(this.C, this.curId); }catch(_){} }
+        this._dirty.clear();
+        this.warn("⚠️ 本机浏览器存储已满，已移除 " + dropped + " 个最旧的会话。"
+                + "当前浏览器不支持 IndexedDB（常见于无痕/隐私模式），换普通窗口可存下全部历史。");
+        return false;
+      }
+    } finally { this._flushing = false; }
+  },
+
+  cur(){ return this.list.find(s => s.id === this.curId) || this.new_(); },
+  msgsOf(s){ return (s && s.msgs) ? s.msgs : []; },
+
+  new_(){
+    const s = {id:"s" + Date.now().toString(36) + Math.random().toString(36).slice(2,5),
+               title:"新会话", ts:Date.now(), msgs:[], n:0};
+    this.list.unshift(s); this.curId = s.id;
+    try{ localStorage.setItem(this.C, s.id); }catch(e){}
+    /* 会话数封顶：超限就撤最早的，但**明着说**，不像以前那样闷声删 */
+    if(this.list.length > this.MAX){
+      const drop = this.list.slice(this.MAX);
+      this.list = this.list.slice(0, this.MAX);
+      if(this._useIdb) for(const d of drop){ try{ IDB.del("s:" + d.id); }catch(e){} }
+      this.warn("⚠️ 会话数已达上限 " + this.MAX + " 个，最早的 " + drop.length
+              + " 个已移除。想长期留档的内容，请用气泡下方的「导出 PDF / Word」。");
+    }
+    if(!this._dirty) this._dirty = new Set();
+    this._dirty.add(s.id); this.save();
+    return s;
+  },
+
+  async switchTo(id){
+    if(!this.list.some(s => s.id === id)) return;
+    try{ localStorage.setItem(this.C, id); }catch(e){}
+    this.curId = id;
+    renderSession();
+    const s = await this.hydrate(id);
+    if(this.curId !== id) return;              /* 期间又切走了，别抢渲染 */
+    if(!s || !s.msgs) return;
+    renderChat();
+    this.save();
+  },
+
+  async del(id){
+    if(this._useIdb){ try{ await IDB.del("s:" + id); }catch(e){} }
+    if(this._dirty) this._dirty.delete(id);
+    this.list = this.list.filter(s => s.id !== id);
     if(!this.list.length) this.new_();
-    else { if(this.curId===id){ this.curId = this.list[0].id; localStorage.setItem(this.C, this.curId); }
-           this.save(); }
-    renderChat(); renderSession();
+    else if(this.curId === id){
+      this.curId = this.list[0].id;
+      try{ localStorage.setItem(this.C, this.curId); }catch(e){}
+      await this.hydrate(this.curId);
+    }
+    renderChat(); renderSession(); this.save();
   },
+
   rename(id){
-    const s = this.list.find(x=>x.id===id); if(!s) return;
+    const s = this.list.find(x => x.id === id); if(!s) return;
     const t = prompt("会话名称", s.title);
-    if(t!=null){ s.title = t.trim() || s.title; this.save(); renderSession(); }
+    if(t != null){ s.title = t.trim() || s.title; this.save(); renderSession(); }
   },
-  clearAll(){
-    if(!confirm("清空全部历史会话？此操作只影响本机浏览器。")) return;
-    this.list = []; this.new_(); renderChat(); renderSession();
+
+  async clearAll(){
+    if(!confirm("清空全部历史会话？此操作只影响本机浏览器，且不可恢复。")) return;
+    const ids = this.list.map(s => s.id);
+    this.list = [];
+    if(this._useIdb){ for(const id of ids){ try{ await IDB.del("s:" + id); }catch(e){} } }
+    if(this._dirty) this._dirty.clear();
+    this.new_(); renderChat(); renderSession();
+    try{ await this.flush(); }catch(e){}
   },
+
+  /* 裁剪：不再静默 shift —— 砍掉的条数会在会话顶部插一条说明 */
+  trim_(s){
+    const m = s.msgs; if(!m) return;
+    let cut = 0;
+    while(m.length > this.MSG_MAX){ m.shift(); cut++; }
+    if(!cut){
+      let ch = 0;
+      for(const r of m) ch += (r && r.html ? r.html.length : 0);
+      while(ch > this.SESS_MAXCHARS && m.length > 2){
+        ch -= (m[0] && m[0].html ? m[0].html.length : 0);
+        m.shift(); cut++;
+      }
+    }
+    if(cut) m.unshift({who:"系统", cls:"sys",
+      html:"（本机存储上限：本会话最早的 " + cut + " 条已折叠，不再保留。需要长期留存请导出 PDF / Word。）"});
+  },
+
   push(rec){
     const s = this.cur();
+    if(!s.msgs) s.msgs = [];
     s.msgs.push(rec);
-    if(s.msgs.length > this.MSG_MAX) s.msgs.shift();
-    if(s.title==="新会话" && rec.cls==="me" && rec.text) s.title = rec.text.slice(0,18);
-    s.ts = Date.now(); this.save();
+    s.n = s.msgs.length;
+    this.trim_(s);
+    s.n = s.msgs.length;
+    if(s.title === "新会话" && rec.cls === "me"){
+      const t = String(rec.html || "").replace(/<[^>]*>/g, "").trim();
+      if(t) s.title = t.slice(0, 18);
+    }
+    s.ts = Date.now();
+    if(!this._dirty) this._dirty = new Set();
+    this._dirty.add(s.id);
+    this.save();
   },
-  touch(){ const s = this.cur(); s.ts = Date.now(); this.save(); }
+
+  touch(){ const s = this.cur(); s.ts = Date.now(); if(s && s.id) { if(!this._dirty) this._dirty = new Set(); this._dirty.add(s.id); } this.save(); },
+
+  /* 只显示、不落盘的提醒 */
+  warn(text){
+    try{
+      const app = document.getElementById("app");
+      const c = document.getElementById("chat");
+      if(!c || (app && app.style.display === "none")) return;
+      const rec = {who:"系统", html:esc(text), cls:"sys"};
+      paintMsg(rec); autoScroll();
+    }catch(e){ console.warn(text); }
+  },
+
+  /* 给「历史会话」面板用的存储体检数据 */
+  async stat(){
+    let bytes = 0;
+    if(this._useIdb){
+      for(const s of this.list){
+        if(s.msgs) for(const r of s.msgs) bytes += (r && r.html ? r.html.length : 0) * 2;
+      }
+    }else{
+      try{ bytes = (localStorage.getItem(this.K) || "").length * 2; }catch(e){}
+    }
+    return {mode: this._useIdb ? "IndexedDB 大仓" : "localStorage 降级（约 5MB 上限）",
+            n: this.list.length, bytes: bytes};
+  }
 };
+/* 关页面 / 切后台前把没写完的落盘，避免最后一条丢在半路 */
+window.addEventListener("pagehide", function(){ try{ SS.flush(); }catch(e){} });
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "hidden"){ try{ SS.flush(); }catch(e){} }
+});
 
 function paintMsg(rec){
   const c = document.getElementById("chat");
@@ -2435,6 +2701,12 @@ function renderChat(){
   const c = document.getElementById("chat"); if(!c) return;
   const s = SS.cur();
   c.innerHTML = "";
+  if(!s.msgs){
+    /* 正文还没从仓里取出来（切会话时的空档），先给个提示，别让人以为被截断 */
+    c.innerHTML = `<div id="loading"><div style="color:var(--teal);font-size:15px;margin-bottom:8px">正在载入该会话…</div>
+      <div style="font-size:12px;opacity:.7">历史正文按需从本机大仓读取，稍等半秒。</div></div>`;
+    return;
+  }
   if(!s.msgs.length){
     const n = DOCS.reduce((a,d)=>a+d.s.length,0);
     c.innerHTML = `<div id="loading"><div style="color:var(--teal);font-size:15px;margin-bottom:8px">蛇杖二号 · 文库问答</div>
@@ -2452,13 +2724,19 @@ function renderSession(){
   box.innerHTML = SS.list.map(s=>{
     const d = new Date(s.ts);
     const when = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    const cnt  = (s.msgs ? s.msgs.length : (s.n || 0));
     return `<div class="srow${s.id===SS.curId?" cur":""}">
-      <div class="tt" onclick="SS.switchTo('${s.id}')">${esc(s.title)}
-        <span style="color:var(--dim);font-size:11.5px"> · ${s.msgs.length}条 · ${when}</span></div>
-      <button onclick="SS.rename('${s.id}')">改名</button>
-      <button onclick="SS.del('${s.id}')">删</button>
+      <div class="tt" onclick="SS.switchTo('${escAttr(s.id)}')">${esc(s.title)}
+        <span style="color:var(--dim);font-size:11.5px"> · ${cnt}条 · ${when}</span></div>
+      <button onclick="SS.rename('${escAttr(s.id)}')">改名</button>
+      <button onclick="SS.del('${escAttr(s.id)}')">删</button>
     </div>`;
   }).join("") || `<div class="hint">暂无会话</div>`;
+  const st = document.getElementById("sesstat");
+  if(st) SS.stat().then(function(r){
+    const mb = (r.bytes / 1048576);
+    st.innerHTML = `存储：<b>${esc(r.mode)}</b> · ${r.n} 个会话 · 约 ${mb < 0.1 ? (r.bytes/1024).toFixed(0)+" KB" : mb.toFixed(1)+" MB"}`;
+  }).catch(function(){});
 }
 function openSess(){ renderSession(); document.getElementById("sesmask").style.display = "flex"; }
 function closeSess(){ document.getElementById("sesmask").style.display = "none"; }
@@ -3347,18 +3625,23 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
   if(rdl) rdl.addEventListener("click", function(e){ if(e.target.closest(".chap")) closeRdList(); });
 })();
 
-/* ============ 启动（放在最后：此时 SS / MEM / 各函数均已就绪）============ */
-SS.load();
-MEM.load();
-NET.load();
-renderMemCount();
-checkStatus();
-boot();
-applyFont();
-applyModel();
-applyThink();
-applyNet();
-renderNetStat();
+/* ============ 启动（放在最后：此时 SS / MEM / 各函数均已就绪）============
+   🔴 2026-10-08：SS.load() 已改为异步（IndexedDB）。必须等它读完再渲染，
+      否则首屏会先拿空列表画一遍、随后又被历史顶掉，看着也像「被截断」。 */
+(async function startUp(){
+  try{ await SS.load(); }
+  catch(e){ console.warn("[SS] 载入失败，已用空会话兜底", e); if(!SS.list.length) SS.new_(); }
+  MEM.load();
+  NET.load();
+  renderMemCount();
+  checkStatus();
+  boot();
+  applyFont();
+  applyModel();
+  applyThink();
+  applyNet();
+  renderNetStat();
+})();
 
 /* ============ 待办 / 官网公告 · 抽屉 ============
    动态注入，不动原有 DOM 结构。数据来自 data/todo.json，
