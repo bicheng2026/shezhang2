@@ -1,5 +1,5 @@
 /* ==================================================================
-   蛇杖二号 · Agent 内核  v2-agent3
+   蛇杖二号 · Agent 内核  v2-agent4
    ------------------------------------------------------------------
    干什么：把「检索权」从 ask() 的硬编码直线里拿回来，交给模型。
            模型自己决定查什么、查几轮；查不到允许它说「没找到」。
@@ -34,9 +34,9 @@ const CFG = {
   const s = document.createElement("style");
   s.id = "sz2-agent-css";
   s.textContent = [
-    ".msg.tool .bubble{background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.22);",
+    ".msg.tool .bubble{background:rgba(201,162,39,.08);border:1px solid rgba(201,162,39,.30);",
     "color:var(--dim);font-size:12.5px;line-height:1.75;white-space:pre-wrap;word-break:break-word}",
-    ".msg.tool .who{color:#3b82f6;font-size:12px}",
+    ".msg.tool .who{color:#c9a227;font-size:12px}",
     ".msg.tool .bubble b{color:var(--teal);font-weight:600}"
   ].join("");
   document.head.appendChild(s);
@@ -926,10 +926,11 @@ async function runLoop(opt){
     /* 仍然没拿到能看的文本 → 交还控制权，由 ask() 走原直线 RAG 兜底 */
     return "";
   }
-  /* 有答案才渲染：答案里的〔n〕〔网n〕〔待办n〕要能查到出处。
-     位置在答案气泡之后（addMsg 是尾部 append），正好当"参考文献"读。
-     降级路径已在上面的 return "" 处截断，不会给直线 RAG 多贴一张卡。 */
-  renderRefs();
+  /* 🔴 2026-10-07 主公要求：**不显示引用对照卡**。
+     原先这里会 renderRefs()，在答案后面贴一张「〔1〕是哪本书 / 〔待办1〕是哪条通知」的对照表。
+     主公看过之后说不要。已停用。
+     下方 collectRefs() 的登记逻辑保留着（不影响任何显示，只是记在内存里），
+     将来若要换个形式呈现出处，数据还在。 */
   return final;
 }
 
@@ -961,7 +962,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent3",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
+  v:"v2-agent4",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
   runLoop,
   selfTest,
   CFG,
