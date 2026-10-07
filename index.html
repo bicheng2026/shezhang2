@@ -41,6 +41,22 @@ body{
 #lock .err{color:#e07a6a;font-size:13px;margin-top:12px;min-height:20px}
 /* ---------- 主界面 ---------- */
 #app{display:none;flex-direction:row;height:100%;max-width:none;margin:0}
+/* 使用说明弹窗（2026-10-07 主公要求）：首次进站弹一次，点「不再显示」后收进设置里 */
+#helpmask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:120;
+  align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+#helpmask .hb{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  max-width:520px;width:100%;max-height:86vh;overflow-y:auto;padding:22px 22px 18px;
+  box-shadow:0 18px 50px rgba(0,0,0,.5)}
+#helpmask h2{margin:0 0 4px;font-size:18px;color:var(--teal);letter-spacing:1px}
+#helpmask .sub{font-size:12px;color:var(--dim);margin:0 0 14px}
+#helpmask p{margin:9px 0;font-size:13.5px;line-height:1.8}
+#helpmask ul{margin:8px 0;padding-left:20px;font-size:13.5px;line-height:1.85}
+#helpmask li{margin:5px 0}
+#helpmask .tip{background:rgba(224,169,74,.10);border-left:3px solid #e0a94a;
+  border-radius:0 8px 8px 0;padding:9px 12px;margin:12px 0;font-size:13px;color:#e0a94a;line-height:1.75}
+#helpmask .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:16px}
+#helpmask .acts .sp{flex:1}
+#helpmask label.chk{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer}
 header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;
 background:linear-gradient(180deg,#16232a,#111a1e)}
 /* 免责声明条：贴在 header 下方，全宽不挤压聊天区（flex-shrink:0，不被压缩） */
@@ -318,17 +334,22 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <div class="tip">教材原文优先，回答可追溯出处；仅供学习参考，不构成诊疗意见。Enter 发送 / Shift+Enter 换行</div>
   </div>
   <div id="reader" style="display:none">
-    <div class="rdhead">
-      <button class="iconbtn" onclick="showChat()">← 返回对话</button>
-      <button id="rdlistbtn" class="iconbtn" onclick="toggleRdList()">☰ 目录</button>
-      <div class="rdmeta"><div id="rdTitle" class="rdt">蛇杖二号 · 文库</div><div id="rdSub" class="rds"></div></div>
-      <div class="sp"></div>
-      <button class="iconbtn" onclick="renderHome()">🏠 总览</button>
-    </div>
-    <div class="rdbodywrap">
-      <div id="rdList" class="rdlist"></div>
-      <div id="rdText" class="rdtext"></div>
-    </div>
+  <div class="rdhead">
+    <button class="iconbtn" onclick="showChat()">← 返回对话</button>
+    <button id="rdlistbtn" class="iconbtn" onclick="toggleRdList()">☰ 目录</button>
+    <div class="rdmeta"><div id="rdTitle" class="rdt">蛇杖二号 · 文库</div><div id="rdSub" class="rds"></div></div>
+    <div class="sp"></div>
+    <!-- 原版 PDF / 文字版 切换（2026-10-07：教材默认看原版 PDF，带插图） -->
+    <button id="rdviewbtn" class="iconbtn" onclick="toggleRdView()" style="display:none">📝 文字版</button>
+    <button class="iconbtn" onclick="renderHome()">🏠 总览</button>
+  </div>
+  <div class="rdbodywrap">
+    <div id="rdList" class="rdlist"></div>
+    <div id="rdText" class="rdtext"></div>
+    <!-- 原版 PDF 视图：指向独立仓库的 Pages 站点（shezhang2-pdf），
+         不占主站 1GB 额度；浏览器按 Range 流式加载，不用等整本下完 -->
+    <iframe id="rdPdf" style="display:none;flex:1;border:0;background:#525659" title="教材原版 PDF"></iframe>
+  </div>
   </div>
 </div>
 </div>
@@ -387,6 +408,11 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
 <div id="mask">
   <div id="set">
     <h3>设置</h3>
+    <div class="hint" style="background:rgba(224,169,74,.10);border-left:3px solid #e0a94a;border-radius:0 8px 8px 0;padding:9px 12px;margin:0 0 14px;color:#e0a94a;font-size:12.5px;line-height:1.75">
+      ⚠️ <b>要用 AI 问答，下面三项必须填</b>（本站不含任何 Key，每人填自己的）。<br>
+      不填也能看文库和公告，只是问 AI 不会回答。<br>
+      不知道填什么？点最下方的「📖 使用说明（每个按钮干什么）」。
+    </div>
     <label>接口地址（兼容 OpenAI 的 /chat/completions）</label>
     <input id="base" placeholder="https://api.deepseek.com/v1">
     <label>API Key（仅保存在本机浏览器）</label>
@@ -470,6 +496,7 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <input id="acolor" type="color" value="#e3eef0">
     <label>回答显示速度（字/秒，0=即时；默认25）</label>
     <input id="tspeed" type="range" min="0" max="120" step="5" value="25">
+    <button class="close" onclick="window.showHelp()">📖 使用说明（每个按钮干什么）</button>
     <button class="close" onclick="hardReload()">🔄 强制刷新（清缓存 · 载入最新版）</button>
     <button class="btn" onclick="clearLocal()" style="background:var(--line)">清除本机数据（退出并清空配置）</button>
     <div class="hint" id="verhint" style="margin-top:8px">当前版本：载入中…</div>
@@ -1006,10 +1033,74 @@ async function unlock(){
   }
   if(err) err.textContent = "口令不对，再试一次";
 }
+/* ============ 使用说明弹窗（2026-10-07 主公要求）============
+   开始页弹一次；点「不再显示」后收进设置里（设置 → 使用说明 仍可再打开）。
+   内容刻意做短 —— 完整版在 help.html。只讲最要紧的三件：
+   ① 它是 Agent（会自己翻书，所以先动几下才回答）
+   ② 要用 AI 问答必须先自己填 API Key（本站不含 Key）
+   ③ 答案下方的「引用对照」卡是角标的字典 */
+window.showHelp = function(){
+  var m = document.getElementById("helpmask");
+  if(!m){
+    m = document.createElement("div");
+    m.id = "helpmask";
+    m.innerHTML =
+      '<div class="hb">' +
+        '<h2>欢迎使用蛇杖二号</h2>' +
+        '<p class="sub">临床医学教材库 ＋ 会自己查书的 AI</p>' +
+        '<p>先说清楚：<b>这是一个 Agent（智能体）</b>，不是普通问答机器人。' +
+          '你提问后，它会<b>自己决定查哪几本教材、要不要再查一轮</b>，然后带着出处回答。</p>' +
+        '<p style="color:var(--dim);font-size:12.5px">所以第一次用会觉得「它怎么先动了几下才回答」——' +
+          '那正是它在翻书，不是卡住了。</p>' +
+        '<div class="tip"><b>⚠️ 要用 AI 问答，得先填你自己的 API Key</b><br>' +
+          '本站不含任何 Key。点右上角「<b>设置</b>」，填 接口地址 + API Key + 模型名，保存后即可提问。<br>' +
+          '<span style="font-size:12px;opacity:.85">不填也能看文库和公告，只是问 AI 不会回答。</span></div>' +
+        '<p><b>三件最常用的事</b></p>' +
+        '<ul>' +
+          '<li>直接提问，例如「休克的分期和机制怎么理解」</li>' +
+          '<li>答案下方有「📎 引用对照」卡 —— <b>〔1〕是哪本书、〔待办1〕是哪条通知，全在里面</b></li>' +
+          '<li>顶部「待办」抽屉看官网公告；班群消息要输口令（问班长要）</li>' +
+        '</ul>' +
+        '<div class="acts">' +
+          '<button class="iconbtn" onclick="window.open(\'help.html\',\'_blank\',\'noopener\')">📖 查看完整说明</button>' +
+          '<span class="sp"></span>' +
+          '<label class="chk"><input type="checkbox" id="helpnomore"> 不再显示</label>' +
+          '<button class="iconbtn" style="border-color:var(--teal);color:var(--teal)" ' +
+            'onclick="window.closeHelp()">知道了</button>' +
+        '</div>' +
+        '<p style="font-size:11.5px;color:var(--dim);margin:12px 0 0">' +
+          '仅作学术交流，不做商用。教材版权归原出版社所有，请支持正版。<br>' +
+          '以后想再看：<b>设置 → 使用说明</b>。</p>' +
+      '</div>';
+    /* 点遮罩空白处关闭（等于「知道了」，不勾不再显示） */
+    m.addEventListener("click", function(e){ if(e.target === m) window.closeHelp(); });
+    document.body.appendChild(m);
+  }
+  m.style.display = "flex";
+};
+window.closeHelp = function(){
+  var m = document.getElementById("helpmask");
+  var chk = document.getElementById("helpnomore");
+  if(chk && chk.checked){
+    try{ localStorage.setItem("sz2_help_hide", "1"); }catch(e){}
+  }
+  if(m) m.style.display = "none";
+};
+window.showHelpOnce = function(){
+  try{
+    if(localStorage.getItem("sz2_help_hide") === "1") return;    /* 勾过「不再显示」→ 永久不弹 */
+    if(sessionStorage.getItem("sz2_help_shown") === "1") return;  /* 本次会话已弹过 → 别再骚扰 */
+    sessionStorage.setItem("sz2_help_shown", "1");
+  }catch(e){}
+  window.showHelp();
+};
+
 function enterSite(){
   sessionStorage.setItem("sz2_ok","1");
   document.getElementById("lock").style.display="none";
   document.getElementById("app").style.display="flex";
+  /* 等主界面铺好再弹，否则弹窗和首屏渲染抢帧 */
+  setTimeout(function(){ try{ window.showHelpOnce(); }catch(e){} }, 700);
   try{ return encKey().then(boot).catch(function(e){ console.warn("密钥派生失败", e); boot(); }); }
   catch(e){ boot(); }
 }
@@ -1033,6 +1124,8 @@ document.addEventListener("keydown", function(e){
     sessionStorage.setItem("sz2_ok","1");
     lockEl.style.display = "none";
     appEl.style.display  = "flex";
+    /* 免密直通也要弹一次说明（首次访问）；showHelpOnce 内部保证一次会话只弹一次 */
+    setTimeout(function(){ try{ window.showHelpOnce(); }catch(e){} }, 700);
   }
   /* 读不到配置时按「开锁」放行 —— 宁可让人进，也别把站长自己关在门外 */
   var locked = !(ACCESS && ACCESS.lock === false);
@@ -2974,8 +3067,52 @@ function showChat(){
   document.getElementById("bar").style.display = "block";
   autoScroll(true);      /* 从阅读面板回到对话：回到底部并复位跟随 */
 }
+/* ---------- 原版 PDF 视图（2026-10-07 主公要求）----------
+   为什么放独立仓库：教材 PDF 压缩后约 770 MB，而主站 Pages 软限 1 GB，
+   塞进去只剩 12% 余量，以后没法再加东西。拆到 bicheng2026/shezhang2-pdf
+   等于再拿一份 1 GB 额度，主站不受影响。
+   只有 01_教材/ 压了 PDF；其他分类没有 → 按钮不出现，自动用文字版。
+   浏览器内嵌 PDF 走 Range 流式加载，不用等整本下完。 */
+var PDFBASE = "https://bicheng2026.github.io/shezhang2-pdf/pdf/";
+var _rdPdfOn = false, _rdPdfUrl = "";
+function pdfUrlFor(d){
+  if(!d) return "";
+  if(!/^01_教材\//.test(String(d.f || ""))) return "";
+  return PDFBASE + encodeURIComponent(String(d.t || "").trim()) + ".pdf";
+}
+window.toggleRdView = function(force){
+  if(!_rdPdfUrl) return;
+  _rdPdfOn = (force === undefined) ? !_rdPdfOn : !!force;
+  var pdf = document.getElementById("rdPdf");
+  var txt = document.getElementById("rdText");
+  var lst = document.getElementById("rdList");
+  var btn = document.getElementById("rdviewbtn");
+  if(_rdPdfOn){
+    if(pdf){
+      if(pdf.getAttribute("src") !== _rdPdfUrl) pdf.setAttribute("src", _rdPdfUrl);
+      pdf.style.display = "block";
+    }
+    if(txt) txt.style.display = "none";
+    if(lst) lst.style.display = "none";
+    if(btn) btn.textContent = "📝 文字版";
+  } else {
+    if(pdf) pdf.style.display = "none";
+    if(txt) txt.style.display = "block";
+    if(lst) lst.style.display = "";
+    if(btn) btn.textContent = "📄 原版PDF";
+  }
+};
+
 function openDoc(d){
   showReader();
+  window._curDoc = d;
+  _rdPdfUrl = pdfUrlFor(d);
+  _rdPdfOn = false;
+  var _pv = document.getElementById("rdviewbtn");
+  if(_pv){
+    _pv.style.display = _rdPdfUrl ? "inline-block" : "none";
+    _pv.textContent = "📄 原版PDF";
+  }
   document.getElementById("rdTitle").textContent = d.t || d.f;
   document.getElementById("rdSub").textContent = d.f + " · " + (d.s ? d.s.length : 0) + " 章 · " + Math.round(d.n/1024) + " KB";
   const rl = document.getElementById("rdList");
@@ -2992,6 +3129,9 @@ function openDoc(d){
     rl.appendChild(b);
   });
   openSec(d, 0);
+  /* 教材默认直接看**原版 PDF**（带插图）—— 主公要求「侧边栏加载原本的 pdf」。
+     文字版仍在，点右上角「📝 文字版」切换（文字版能选中复制、AI 也是按它检索）。 */
+  if(_rdPdfUrl) window.toggleRdView(true);
 }
 async function readSec(d, i){
   const a = d.s[i][1];
