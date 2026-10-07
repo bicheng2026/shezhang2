@@ -344,6 +344,9 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <div class="sp"></div>
     <!-- 原版 PDF / 文字版 切换（2026-10-07：教材默认看原版 PDF，带插图） -->
     <button id="rdviewbtn" class="iconbtn" onclick="toggleRdView()" style="display:none">📝 文字版</button>
+    <!-- 一键全屏：只在看 PDF 时出现（2026-10-07 主公要求） -->
+    <button id="rdfullbtn" class="iconbtn" onclick="rdFullscreen()" style="display:none"
+            title="把 PDF 放大到整屏，再点一次或按 Esc 退出">⛶ 全屏</button>
     <button class="iconbtn" onclick="renderHome()">🏠 总览</button>
   </div>
   <div class="rdbodywrap">
@@ -351,7 +354,7 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <div id="rdText" class="rdtext"></div>
     <!-- 原版 PDF 视图：指向独立仓库的 Pages 站点（shezhang2-pdf），
          不占主站 1GB 额度；浏览器按 Range 流式加载，不用等整本下完 -->
-    <iframe id="rdPdf" style="display:none;flex:1;border:0;background:#525659" title="教材原版 PDF"></iframe>
+    <iframe id="rdPdf" allowfullscreen style="display:none;flex:1;border:0;background:#525659" title="教材原版 PDF"></iframe>
   </div>
   </div>
 </div>
@@ -3137,6 +3140,34 @@ window.toggleRdView = function(force){
     if(lst) lst.style.display = "";
     if(btn) btn.textContent = "📄 原版PDF";
   }
+  /* 全屏按钮只在看 PDF 时有意义，文字版没 PDF 就不用出现 */
+  var fb = document.getElementById("rdfullbtn");
+  if(fb) fb.style.display = _rdPdfOn ? "inline-block" : "none";
+};
+
+/* 一键全屏（2026-10-07 主公要求）。
+   对 **iframe 元素本身** 请求全屏 —— 跨域 iframe 内部无法操作，但外层文档
+   对它能全屏（前提是 iframe 带 allowfullscreen，已加）。
+   再点一次 / 按 Esc 退出；都不支持就提示用浏览器自带的全屏。 */
+window.rdFullscreen = function(){
+  var f = document.getElementById("rdPdf");
+  if(!f) return;
+  var d = document;
+  var cur = d.fullscreenElement || d.webkitFullscreenElement || d.msFullscreenElement;
+  if(cur){
+    var ex = d.exitFullscreen || d.webkitExitFullscreen || d.msExitFullscreen;
+    if(ex) try{ ex.call(d); }catch(e){}
+    return;
+  }
+  var req = f.requestFullscreen || f.webkitRequestFullscreen || f.msRequestFullscreen;
+  if(!req){
+    alert("这个浏览器不支持网页全屏。手机端可以试试浏览器菜单里的「全屏」或把手机横过来。");
+    return;
+  }
+  try{
+    var p = req.call(f);
+    if(p && p.catch) p.catch(function(){ /* 被浏览器策略拒绝就静默，不弹一堆报错 */ });
+  }catch(e){}
 };
 
 function openDoc(d){
