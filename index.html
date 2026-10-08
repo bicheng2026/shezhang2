@@ -862,12 +862,13 @@ function adminPageHtml(state){
       btn('badmin','保存','#0f766e') +
       '<div id="r2" style="margin-top:8px;font-size:13px;min-height:22px"></div>') +
     card('5. 上传资料到文库',
-      '<div style="font-size:12px;opacity:.8;line-height:1.7;margin-bottom:8px">' +
-      '上传到 <code>lib/</code>。<br>⚠️ <b>目前索引里只有教材</b>——教材以外的资料<b>故意不建索引</b>' +
-      '（涉版权，回答时可参考但不展示、不引用），所以上传了也不会显示，这是设计如此。</div>' +
+      '<div style="font-size:12px;opacity:.85;line-height:1.75;margin-bottom:8px">' +
+      '<b>小文件</b>（截图 / 笔记 / 小 PDF，单文件 ≤ 2.5MB）点下面的<b>「上传」</b>直接传，不用找我代劳；<b>大文件</b>用桌面上的<b>「上传资料.bat」</b>。<br>' +
+      '传上去落在 <code>lib/00_待入库/</code>，<b>还没进检索索引</b> —— 要搜得到还得再让我建一次索引。<br>' +
+      '⚠️ 这是<b>公开仓库</b>，拿到链接的人都能读，私人资料别往这传。</div>' +
       '<input type="file" id="f1" multiple style="margin-bottom:8px">' +
-      btn('bup','上传','#0f766e') +
-      '<div id="r3" style="margin-top:8px;font-size:13px"></div>') +
+      btn('bup','上传','#0f766e') + btn('blist','看已上传','#475569') +
+      '<div id="r3" style="margin-top:8px;font-size:13px;line-height:1.8"></div>') +
   '</div>';
 }
 
@@ -1008,11 +1009,61 @@ function bindAdmin(w, salt, pw){
     if(r && (r.code === 0 || r.action === 'adminpw')) set('r2','已修改。下次进后台请用新密码。','#059669');
     else set('r2','失败：' + ((r && r.msg) || ''), '#b91c1c');
   });
-  var bu = d.getElementById('bup');
-  if(bu) bu.addEventListener('click', function(){
-    var f = d.getElementById('f1').files;
-    if(!f.length){ set('r3','先选文件','#b91c1c'); return; }
-    set('r3', '已选 ' + f.length + ' 个文件。上传到 GitHub 需要写权限（token 只在云端，不经过浏览器），请让毕成代劳。', '#667085');
+  /* ---- 5. 上传资料（2026-10-08：原来只回一句「请让毕成代劳」——按键是假的。
+         现在真的走云函数 upload 写进 lib/00_待入库/，token 仍在云端、不经过浏览器。---- */
+  var bu = d.getElementById('bup'), bl = d.getElementById('blist');
+  function fmtSize(n){
+    n = Number(n) || 0;
+    return n < 1024 ? (n + ' B') : (n < 1048576 ? ((n / 1024).toFixed(1) + ' KB')
+      : ((n / 1048576).toFixed(2) + ' MB'));
+  }
+  function readB64(file){
+    return new Promise(function(res, rej){
+      var fr = new FileReader();
+      fr.onload = function(){ var s = String(fr.result), i = s.indexOf(',');
+        res(i < 0 ? s : s.slice(i + 1)); };
+      fr.onerror = function(){ rej(new Error('read fail')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  if(bu) bu.addEventListener('click', async function(){
+    var inp = d.getElementById('f1');
+    var fl = (inp && inp.files) ? Array.prototype.slice.call(inp.files) : [];
+    if(!fl.length){ set('r3','先选文件','#b91c1c'); return; }
+    var old = bu.textContent;
+    bu.disabled = true; bu.textContent = '上传中…';
+    var okN = 0, bad = [];
+    for(var i=0;i<fl.length;i++){
+      var f = fl[i];
+      set('r3','(' + (i+1) + '/' + fl.length + ') 传 ' + f.name + ' …','#667085');
+      if(f.size > 2621440){
+        bad.push(f.name + '（' + fmtSize(f.size) + '，超过 2.5MB 上限，改用桌面「上传资料.bat」）'); continue;
+      }
+      try{
+        var b64 = await readB64(f);
+        var r = await window.callCloud('upload', {pw: pw, salt: salt, name: f.name, b64: b64});
+        if(r && r.ok) okN++;
+        else bad.push(f.name + '：' + ((r && r.msg) || '未知错误'));
+      }catch(e){ bad.push(f.name + '：网络断了'); }
+    }
+    bu.disabled = false; bu.textContent = old;
+    if(bad.length){
+      set('r3', '成功 ' + okN + ' 个，失败 ' + bad.length + ' 个：<br>' +
+        bad.map(function(x){ return '· ' + x; }).join('<br>'), '#b91c1c');
+    } else {
+      set('r3', '全部 ' + okN + ' 个已传到 <code>lib/00_待入库/</code>' +
+        '。要进检索索引还得我建一次索引，跟我说一声就行。', '#059669');
+    }
+  });
+  if(bl) bl.addEventListener('click', async function(){
+    set('r3','正在读…','#667085');
+    var r = null;
+    try{ r = await window.callCloud('listup', {pw: pw, salt: salt}); }catch(e){ r = null; }
+    if(!r || !r.ok){ set('r3','读失败：' + ((r && r.msg) || '网络断了'), '#b91c1c'); return; }
+    if(!r.count){ set('r3','待入库目录还是空的。','#667085'); return; }
+    set('r3', '已上传 ' + r.count + ' 个（都没进索引）：<br>' +
+      r.files.map(function(x){ return '· ' + x.name + '（' + fmtSize(x.size) + '）'; })
+        .join('<br>'), '#334155');
   });
 }
 
