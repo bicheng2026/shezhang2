@@ -170,13 +170,24 @@ print(hashlib.sha256((salt + &quot;::&quot; + pw).encode()).hexdigest())
     <li><b>函数类型必须选「Web 函数」</b>（选成事件函数收不到消息），运行环境 <code>Nodejs16.13</code></li>
     <li>上传刚下载的 zip（<b>根目录直接是那三个文件</b>，别套文件夹）</li>
     <li>建好后到「函数配置 → 环境变量」，填：<code>GH_TOKEN</code>、<code>GH_REPO_QQ</code>（你的<b>私有库</b>）、
-        <code>PUBLIC_BASE</code>（你函数地址，下一步拿到）</li>
+        <code>PUBLIC_BASE</code>（你函数地址，下一步拿到）；<br>
+        再加一条 <code>BOT_ALLOW_APPIDS</code> = <b>你自己的机器人 AppID</b>
+        （多个用英文逗号隔开）</li>
     <li>到「触发器」抄下你的函数网址，回填 <code>PUBLIC_BASE</code></li>
   </ol>
+  <div class="note">
+    <b><code>BOT_ALLOW_APPIDS</code> 是什么？</b>——这台函数的门禁。
+    填了就<b>只认你列出的机器人</b>：别人拿他自己的机器人来接入，直接回
+    <code>403 这台云函数不接收这个机器人</code>，连出网核验都不走，一点资源不白花。
+    <b>不填则谁都能接</b>（老部署的兼容行为）。自用的话，建议一定填上。
+    <br>顺手再填一条 <code>SITE_OWNER</code>（给函数起名，如 <code>高一(3)班 · 老王那台</code>），
+    网页「保存并测试」时会回显这个名字 —— 一眼确认「连的是我自己那台」。
+  </div>
   <p class="pager">完整细节在包里的《部署说明.md》，照着做就行。</p>
   <h3>B3 · 网页上认这台函数</h3>
   <ol>
-    <li>打开你的文库网页 →「设置」→「<b>我的云函数</b>」，填你函数地址 →「保存并测试」</li>
+    <li>打开你的文库网页 →「设置」→「<b>我的云函数</b>」，填你函数地址 →「保存并测试」<br>
+        （会显示 <code>owner</code> / <code>restricted</code>：名字对不对、门禁开没开）</li>
     <li>显示「✓ 探通了」即成功</li>
     <li>往下「<b>我的机器人</b>」贴 AppID + AppSecret → 点「接入」→ 拿到一段<b>回调地址</b></li>
     <li>把那段回调地址填到 <code>q.qq.com</code> 的「消息推送 / Webhook」，保存</li>
@@ -184,6 +195,10 @@ print(hashlib.sha256((salt + &quot;::&quot; + pw).encode()).hexdigest())
   <div class="okbox">
     全程 <b>没有口令</b>：贴 AppID + AppSecret 就通。数据按你的 AppID 分文件存在<b>你自己的私有库</b>里，
     别人读不到，你也读不到别人的。
+  </div>
+  <div class="note">
+    <b>看到「这台云函数不接收这个机器人」？</b>说明那台函数开了门禁，而你的 AppID 不在名单里 ——
+    <b>多半是你填了别人的函数地址</b>。照 B1–B3 部署你自己的那台，改回来即可。
   </div>
   <div class="note">
     <b>想让全站都默认用你这台</b>（而不是只有你这台设备）？
