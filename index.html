@@ -510,6 +510,21 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <input id="dmodel" placeholder="留空 = 沿用当前模型">
     <div class="hint">「生成示意图」会要求模型输出 SVG 矢量图，代码能力强的模型效果更好。</div>
     <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+    <div style="font-size:13px;color:var(--teal);margin:4px 0 0">我的云函数（各用各的，互不打扰）</div>
+    <div class="hint" style="line-height:1.8">
+      这里填<b>你自己那台</b>云函数的地址。留空 = 用本站站长那台。<br>
+      想彻底分家（自己的机器人消息只走自己的函数），就照
+      <b>「📦 自助部署指南」</b>部署一台，再把地址填这儿。
+      <span style="opacity:.75">填了只影响你这台设备；想全站生效就写进 <code>data/cloud.json</code>。</span>
+    </div>
+    <input id="cloudurl" placeholder="https://xxxx.ap-guangzhou.tencentscf.com" autocomplete="off" spellcheck="false">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button class="iconbtn" onclick="window.cloudSaveFromSet()">保存并测试</button>
+      <button class="iconbtn" onclick="window.cloudResetSet()">恢复默认</button>
+      <button class="iconbtn" onclick="window.open('deploy.html','_blank','noopener')">怎么部署我自己的？</button>
+    </div>
+    <div id="cloudmsg" class="hint" style="margin-top:8px"></div>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
     <div style="font-size:13px;color:var(--teal);margin:4px 0 0">我的机器人（接自己的班群消息）</div>
     <div class="hint" style="line-height:1.8">
       <b>没有口令这一说。</b>贴上你自己机器人的 <b>AppID + AppSecret</b>，点「接入」即通。<br>
@@ -750,7 +765,7 @@ var GATE = null;
 async function getGate(force){
   if(GATE && !force && GATE.exp > Date.now()) return GATE;
   try{
-    var r = await fetch("https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com/gate", {cache:"no-store"});
+    var r = await fetch(cloudBase() + "/gate", {cache:"no-store"});
     var j = await r.json();
     if(j && j.token) GATE = {token:j.token, exp: Date.now() + (j.ttl||120000)};
   }catch(e){ GATE = null; }
@@ -758,12 +773,57 @@ async function getGate(force){
 }
 window.getGate = getGate;
 
+/* ==================== 云函数地址：**可配置**（2026-10-11 分家改造）====================
+   🔴 为什么必须改（改之前先读）：
+     原来 CLOUD / QQ_CF 两处都**写死**成本站长的云函数地址。别的班照抄这套网页部署后，
+     页面上「我的机器人」还是往**站长那台**云函数发请求 —— 数据虽然按 appid 隔离了，
+     但别人的消息仍要从站长的函数过一遍。主公 2026-10-11 明确要「让他们用自己的云函数」。
+
+   取值优先级（三级）：
+     ① 本机设置里填过的（sz2_cloud，浏览器 localStorage）—— 换函数不用重新部署；
+     ② 站点配置 data/cloud.json 的 cloud 字段 —— 部署时改一次，全站生效；
+     ③ 没配 → 回落到本站站长那台（保证主公自己这套**零改动照常跑**）。 */
+var CLOUD_FALLBACK = 'https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com';
+var CLOUD_URL = CLOUD_FALLBACK;        /* 运行时真值，boot 时被 cloud.json / 本机设置覆盖 */
+function normCloud(u){
+  return String(u || '').trim().replace(/\/+$/, '');   /* 去掉尾部斜杠，免得拼出 //bot */
+}
+function cloudBase(){
+  try{
+    var mine = normCloud(localStorage.getItem('sz2_cloud'));
+    if(mine) return mine;
+  }catch(e){}
+  return CLOUD_URL || CLOUD_FALLBACK;
+}
+window.cloudBase = cloudBase;
+window.cloudSet = function(u){
+  u = normCloud(u);
+  try{
+    if(u && u !== CLOUD_FALLBACK) localStorage.setItem('sz2_cloud', u);
+    else localStorage.removeItem('sz2_cloud');
+  }catch(e){}
+  CLOUD_URL = u || CLOUD_FALLBACK;
+  window.CLOUD = CLOUD_URL;
+};
+/* 启动时读站点配置（data/cloud.json）。读不到就用地主那台，行为与从前完全一致。 */
+async function loadCloudCfg(){
+  try{
+    var r = await fetch('data/cloud.json?t=' + Date.now(), {cache:'no-store'});
+    if(r.ok){
+      var j = await r.json();
+      if(j && j.cloud) CLOUD_URL = normCloud(j.cloud);
+    }
+  }catch(e){ /* 没这个文件是正常情况（站长自己不需要） */ }
+  window.CLOUD = cloudBase();
+  return CLOUD_URL;
+}
+
 /* ==================== 4. 管理员后台 ==================== */
 /* 云函数地址：管理员后台的所有动作都发到它（token 在云端，不经过浏览器） */
-var CLOUD = 'https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com';
+var CLOUD = CLOUD_URL;    /* 由 loadCloudCfg() 覆盖，兼容老代码里的裸 CLOUD 引用 */
 
 window.callCloud = async function(action, obj){
-  var r = await fetch(CLOUD + '/admin?action=' + encodeURIComponent(action), {
+  var r = await fetch(cloudBase() + '/admin?action=' + encodeURIComponent(action), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(obj || {})
@@ -781,7 +841,7 @@ window.callCloud = async function(action, obj){
    页面只存「接入令牌」（szk_…），AppSecret 输完就发走、**不回传、不落本机**。 */
 var BOT_KEY = 'sz2_bot';      /* 本机的机器人接入信息（appid + token + 名称） */
 var botCloud = async function(action, obj){
-  var r = await fetch(CLOUD + '/bot?action=' + encodeURIComponent(action), {
+  var r = await fetch(cloudBase() + '/bot?action=' + encodeURIComponent(action), {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(obj || {})
@@ -1015,14 +1075,14 @@ function bindAdmin(w, salt, pw){
   /* ---- 3. 机器人接入：读当前 / 保存 / 复制回调地址 ----
      回调地址就是云函数的地址 —— 这一段必须复制到 q.qq.com 后台，网页替不了。 */
   var cbEl = d.getElementById('botcb');
-  if(cbEl) cbEl.textContent = CLOUD;
+  if(cbEl) cbEl.textContent = cloudBase();
   var bc = d.getElementById('bcbcopy');
   if(bc) bc.addEventListener('click', function(){
     try{
-      navigator.clipboard.writeText(CLOUD);
+      navigator.clipboard.writeText(cloudBase());
       set('r5', '已复制回调地址，去 q.qq.com 后台「消息推送 / Webhook」粘上', '#059669');
     }catch(e){
-      set('r5', '浏览器不给复制，请手动选中：' + CLOUD, '#b91c1c');
+      set('r5', '浏览器不给复制，请手动选中：' + cloudBase(), '#b91c1c');
     }
   });
   async function botAct(act, extra){
@@ -1311,6 +1371,9 @@ document.addEventListener("keydown", function(e){
    🔴 2026-10-03 修复：以前这里读的是写死的 LOCK_ON（恒为 false），
       导致后台「生成口令 / 立即锁死」形同虚设 —— 云函数明明把 lock 置成了 true，前台却永远直通。 */
 (async function initGate(){
+  /* 先定云函数地址（本机设置 → data/cloud.json → 本站默认），
+     再干别的 —— 后面取文、后台、班群摘要全要用它。 */
+  try{ await loadCloudCfg(); }catch(e){}
   await loadAccess();
   var lockEl = document.getElementById("lock");
   var appEl  = document.getElementById("app");
@@ -3342,9 +3405,69 @@ function openSet(){
   document.getElementById("tspeed").value = localStorage.getItem("sz2_tspeed")||"25";
   document.getElementById("mask").style.display = "flex";
   checkVer();          /* 打开设置时顺手查一下版本 */
+  try{
+    var ce = document.getElementById("cloudurl");
+    if(ce) ce.value = (function(){
+      try{ return localStorage.getItem("sz2_cloud") || ""; }catch(e){ return ""; }
+    })();
+    var cm = document.getElementById("cloudmsg");
+    if(cm) cm.innerHTML = "当前生效：" + esc(cloudBase()) +
+      (CLOUD_URL === CLOUD_FALLBACK ? "（本站默认）" : "");
+  }catch(e){}
   try{ window.renderBotBox(); }catch(e){}
 }
 function closeSet(){ document.getElementById("mask").style.display = "none"; }
+
+/* ==================== 我的云函数 · 保存与测试（2026-10-11）====================
+   填了地址先探一下 /health —— 确认「这确实是一台活着、且认这套协议的云函数」，
+   免得填错地址后「我的机器人」界面一直报「连不上云端」，人却不知道错在哪。 */
+window.cloudSaveFromSet = async function(){
+  var el = document.getElementById("cloudurl");
+  var msg = document.getElementById("cloudmsg");
+  var u = normCloud(el ? el.value : "");
+  if(u && !/^https?:\/\//i.test(u)){
+    if(msg){ msg.innerHTML = "地址要以 https:// 开头（直接复制腾讯云「触发器」里那串）"; msg.style.color = "#c0392b"; }
+    return;
+  }
+  if(!u){
+    window.cloudSet("");
+    if(msg){ msg.innerHTML = "已清空 → 用本站默认：" + esc(cloudBase()); msg.style.color = "#059669"; }
+    window.renderBotBox();
+    return;
+  }
+  if(msg){ msg.innerHTML = "正在测试 " + esc(u) + " …"; msg.style.color = "var(--dim)"; }
+  var j = null;
+  try{
+    var r = await fetch(u + "/health", {cache:"no-store"});
+    j = await r.json();
+  }catch(e){ j = null; }
+  if(!j || !j.ok){
+    if(msg){
+      msg.innerHTML = "连不上，或这地址不是蛇杖二号的云函数。<br>" +
+        "<span style='opacity:.8'>检查：① 地址是否复制完整 ② 腾讯云上函数是否 Active " +
+        "③ 是不是 Web 函数（不是事件函数）。<br>仍要保存吗？点「保存」前请先确认。</span>";
+      msg.style.color = "#c0392b";
+    }
+    /* 测试失败**不自动保存** —— 但允许用户自己判断（这里给个二次确认） */
+    if(!confirm("这台函数没探通：\n" + u + "\n\n仍然保存？（不保存点「取消」）")) return;
+  } else {
+    if(msg){
+      msg.innerHTML = "✓ 探通了：<b>" + esc(u) + "</b>　（" +
+        (j.bots !== undefined ? ('已接入机器人 ' + j.bots + ' 台') : '正常') + "）<br>" +
+        "<span style='opacity:.8'>后面「我的机器人」接入就发到这台。</span>";
+      msg.style.color = "#059669";
+    }
+  }
+  window.cloudSet(u);
+  window.renderBotBox();
+};
+window.cloudResetSet = function(){
+  window.cloudSet("");
+  var el = document.getElementById("cloudurl"); if(el) el.value = "";
+  var msg = document.getElementById("cloudmsg");
+  if(msg){ msg.innerHTML = "已恢复本站默认：" + esc(cloudBase()); msg.style.color = "#334155"; }
+  window.renderBotBox();
+};
 
 /* ==================== 我的机器人 · 面板（2026-10-08）====================
    🔴 设计要点（改之前先读）：
@@ -4088,7 +4211,9 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
         2026-10-07 云函数已改把摘要写进**私密库**（bicheng2026/daily-plan），
         页面这边相应改成「输口令 → 打开云端手机页」，内容不再经过公开仓库。
      公告与待办那一栏是官网公开信息，不受影响。 */
-  var QQ_CF = "https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com";
+  /* 2026-10-11：不再写死 —— 走 cloudBase()（本机设置 → data/cloud.json → 地主那台）。
+     别的班换了自己的云函数，这一处自动跟着走。 */
+  var QQ_CF = (typeof window.cloudBase === 'function') ? window.cloudBase() : CLOUD;
   /* 口令只存本机浏览器，**输一次就长期记住**（2026-10-07 主公明确：不要 24 小时过期）。
      万一要换口令，列表右上角有「换口令」，或到设置里清本机数据。
      🔴 2026-10-08：这条路降级为**兜底**（站长/老部署用）。
