@@ -63,18 +63,24 @@
 
   <h2>〇、先说清楚：不需要口令，用你自己的 AppID + AppSecret</h2>
   <div class="okbox">
-    <b>这套东西没有「共用口令」这一说。</b>
+    <b>这套东西没有「共用口令」这一说。</b>在网页「<b>设置 → 我的机器人</b>」里贴上
+    <b>AppID + AppSecret</b>，点一下<b>「接入」</b>就通了。
   </div>
   <p>每个班用<b>自己申请的机器人</b>，填<b>自己的 AppID 和 AppSecret</b>，
      数据走<b>自己的</b>通道 —— 天然隔离，谁也看不到谁。</p>
-  <pre><code>你的 QQ 机器人 ──(你的 AppID/AppSecret 验签)──▶ 你自己的云函数 ──▶ 你自己班的群消息</code></pre>
-  <p><b>「口令」只是网站访问控制用的</b>（同学进站要输的那个），<b>跟机器人接入完全无关</b>。
-     接入机器人只需要两样东西：</p>
+  <pre><code>你的 QQ 机器人 ──(你的 AppID/AppSecret 自动核验)──▶ 云函数 ──▶ 你自己班的群消息</code></pre>
+  <p>云函数会拿你填的两样东西<b>去 QQ 官方接口现场验一次</b>：
+     能换到 access_token，说明凭据是真的，立刻给你发一枚<b>接入令牌</b>；
+     之后你打开班群摘要，看到的就是<b>你这个机器人</b>收到的消息，别人的机器人一条也进不来。</p>
   <table>
     <tr><th>要填的</th><th>从哪来</th></tr>
     <tr><td><b>AppID</b></td><td>QQ 开放平台 → 你的机器人 → 开发设置</td></tr>
     <tr><td><b>AppSecret</b></td><td>同上（也叫 BotSecret / 密钥）</td></tr>
   </table>
+  <div class="note">
+    <b>为什么不加口令？</b>因为能拿到 AppSecret 的本来就是机器人主人 ——
+    凭据本身就是身份，再叠一层口令只是给自己添麻烦（旧版就是这么干的，现在已拆掉）。
+  </div>
 
   <h2>一、你要准备什么</h2>
   <table>
@@ -122,39 +128,43 @@ AppSecret  = 例如 JTdo0D...Ae9f   ← 一串字母数字</code></pre>
   <p>函数详情页 →「函数配置」→「环境变量」：</p>
   <table>
     <tr><th>变量名</th><th>填什么</th><th>说明</th></tr>
-    <tr><td><code>BOT_SECRET</code></td><td><b>你的 AppSecret</b></td><td>验签用，必填</td></tr>
-    <tr><td><code>PUBKEY</code></td><td>你的机器人公钥</td><td>QQ 后台「开发设置」里能拿到</td></tr>
-    <tr><td><code>ADMIN_TOKEN</code></td><td>自己编一串随机字符</td><td>管理接口口令</td></tr>
-    <tr><td><code>READ_TOKEN</code></td><td>自己编一串随机字符</td><td>读群消息口令</td></tr>
+    <tr><td><code>GH_TOKEN</code></td><td>你的 GitHub 令牌</td><td>存数据用（代码里读，不放前端）</td></tr>
+    <tr><td><code>GH_REPO_QQ</code></td><td><code>你/私有库</code></td><td><b>必须私有库</b>：群消息只落这里</td></tr>
+    <tr><td><code>PUBLIC_BASE</code></td><td>你的函数地址</td><td>用来算回调地址给用户复制</td></tr>
+    <tr><td><code>ADMIN_TOKEN</code></td><td>自己编一串随机字符</td><td>站长后台用（可选）</td></tr>
     <tr><td><code>WATCH_GROUPS</code></td><td>你的群号，留空=不限</td><td>只想收某个群的消息就填</td></tr>
-    <tr><td><code>GH_TOKEN</code></td><td>（可选）GitHub 令牌</td><td>想把摘要存 GitHub 才需要</td></tr>
   </table>
   <div class="okbox">
-    <b>关键就一个 <code>BOT_SECRET</code></b> —— 填上你自己的 AppSecret，这个函数就属于你了。
+    <b>注意 <code>BOT_SECRET</code> 不是必填的</b> —— 这让「接入」完全搬到网页上完成：
+    每个班在「<b>设置 → 我的机器人</b>」里自己填 AppID / AppSecret，
+    云函数记在私密库里；<b>不用去腾讯云控制台改环境变量，也不用站长插手</b>。
   </div>
 
   <h3>3.3 拿到回调地址</h3>
   <p>函数创建好后，在<b>触发器</b>里能看到一个网址，形如：</p>
   <pre><code>https://1499683192-953ux74r8x.ap-guangzhou.tencentscf.com</code></pre>
-  <p class="pager">这串地址每个函数都不一样，<b>复制你自己的那串</b>。</p>
+  <p class="pager">这串地址每个函数都不一样，<b>复制你自己的那串</b>，填到环境变量 <code>PUBLIC_BASE</code> 里。</p>
+  <p>之后网页上接入时，会<b>自动给你算出该填进 QQ 的回调地址</b>，形如
+     <code>你的函数地址/qq?bot=你的AppID</code> —— 路径末尾带 AppID，
+     所以<b>一个云函数可以同时接好几个班的机器人，各收各的，互不串号</b>。</p>
 
   <h2>四、第三步：把地址告诉 QQ（约 5 分钟）</h2>
   <p>回到 <code>q.qq.com</code> 的机器人后台 → <b>开发设置</b> → <b>消息推送 / Webhook 配置</b>：</p>
   <ol>
-    <li>回调地址填上一步拿到的网址</li>
+    <li>回调地址填<b>网页上接入成功后给你的那段</b>（形如 <code>…/qq?bot=你的AppID</code>）</li>
     <li>保存</li>
   </ol>
-  <p><b>QQ 会立刻发一条验证请求过来</b>，你的云函数会自动签名回它。<b>配置保存成功 = 通了。</b></p>
+  <p><b>QQ 会立刻发一条验证请求过来</b>，云函数会用<b>你这个机器人的密钥</b>自动签名回它。<b>配置保存成功 = 通了。</b></p>
   <div class="note">
     验证失败通常是三种原因：<br>
-    ① 地址填错（少了 <code>https://</code>）　② AppSecret 没填对　③ 函数还在 <code>Updating</code> 状态，等 30 秒再试
+    ① 地址填错（少了 <code>https://</code>）　② 网页上 AppSecret 填错　③ 函数还在 <code>Updating</code> 状态，等 30 秒再试
   </div>
 
   <h2>五、验证一下</h2>
-  <p>在函数地址后面加 <code>/health</code>，浏览器打开：</p>
-  <pre><code>https://你的函数地址/health</code></pre>
-  <p>看到 <code>{"ok": true, "has_secret": true, ...}</code> 就说明密钥配好了。
-     然后在群里发一条带「通知」或「截止」的消息，看能不能收到。</p>
+  <p>在网页「<b>设置 → 我的机器人</b>」里点<b>「接入」</b>，成功后会显示
+     <b>✓ 已接入，凭据已核验</b>（云函数拿你的凭据去 QQ 官方换到了 access_token）。
+     之后在群里发一条消息，打开「<b>待办 → 班群摘要</b>」就能看到 —— <b>不用输任何口令</b>。</p>
+  <p>也可以直接看函数自检：<code>你的函数地址/health</code>，里面 <code>bots</code> 字段是已经接入的机器人数。</p>
 
   <h2>六、几个必须知道的坑</h2>
   <table>
@@ -164,7 +174,8 @@ AppSecret  = 例如 JTdo0D...Ae9f   ← 一串字母数字</code></pre>
     <tr><td><b>改完代码要重新打包上传</b></td><td>否则传的还是旧 zip</td></tr>
     <tr><td><b>环境变量在 <code>process.env</code></b></td><td>腾讯云 Node 运行时是 Node.js 原生环境，不是 Web 标准环境</td></tr>
     <tr><td><b>函数刚建好是 <code>Updating</code></b></td><td>等 20–30 秒再测，否则测的是旧版本</td></tr>
-    <tr><td><b>AppSecret 只显示一次</b></td><td>丢了只能重置</td></tr>
+    <tr><td><b>AppSecret 只显示一次</b></td><td>丢了只能重置；网页上填过就存进私密库了，不会丢</td></tr>
+    <tr><td><b>私有库别选错</b></td><td><code>GH_REPO_QQ</code> 必须是 <b>Private</b> 仓库 —— 群消息只落本机/私密库，这是硬红线</td></tr>
   </table>
 
   <h2>七、不想自己部署怎么办</h2>
@@ -181,10 +192,10 @@ AppSecret  = 例如 JTdo0D...Ae9f   ← 一串字母数字</code></pre>
   <ul>
     <li>☐ <code>q.qq.com</code> 上机器人已创建，拿到 AppID + AppSecret</li>
     <li>☐ 腾讯云函数已建，类型是 <b>Web 函数</b>、运行时 <code>Nodejs16.13</code></li>
-    <li>☐ 环境变量 <code>BOT_SECRET</code> 填的是<b>自己的</b> AppSecret</li>
-    <li>☐ <code>/health</code> 返回 <code>has_secret: true</code></li>
-    <li>☐ QQ 后台的回调地址已填、保存成功</li>
-    <li>☐ 群里发测试消息能收到</li>
+    <li>☐ 环境变量 <code>GH_TOKEN</code> / <code>GH_REPO_QQ</code>（私有库）/ <code>PUBLIC_BASE</code> 已填</li>
+    <li>☐ 网页「设置 → 我的机器人」贴 AppID + AppSecret → 点接入 → 显示「✓ 已接入，凭据已核验」</li>
+    <li>☐ QQ 后台的回调地址填的是<b>接入成功后显示的那段</b>（带 <code>?bot=你的AppID</code>），保存成功</li>
+    <li>☐ 群里发测试消息，「待办 → 班群摘要」里能看到，<b>全程没输过任何口令</b></li>
   </ul>
 
   <div class="foot">
