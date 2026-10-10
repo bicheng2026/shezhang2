@@ -473,7 +473,7 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     </div>
     <label>备用模型名</label>
     <input id="model2" placeholder="glm-4.7">
-    <div class="hint">填好备用端点后，底部「🔁 换端点重问」可把同一问题发到另一家服务商——各家尺度不同，此路不通走彼路。备用 Key 与主链路同样只存本机浏览器。</div>
+    <div class="hint">备用端点填好后会作为主链路失败时的自动替补（各家尺度不同，此路不通走彼路）。备用 Key 与主链路同样只存本机浏览器。</div>
     <label style="display:flex;align-items:flex-start;gap:8px;color:var(--ink);margin:12px 0 5px">
       <input type="checkbox" id="thinksw" onchange="setThink(this.checked)" style="width:auto;flex-shrink:0;margin-top:4px">
       <span>默认开启深度思考<br><span style="color:var(--dim);font-size:11.5px">也可以在输入框直接敲 <b>/think</b> 随时切换</span></span>
@@ -840,13 +840,70 @@ window.callCloud = async function(action, obj){
      · botCloud    → /bot，  **不要任何口令，凭据即身份**（所有人用）
    页面只存「接入令牌」（szk_…），AppSecret 输完就发走、**不回传、不落本机**。 */
 var BOT_KEY = 'sz2_bot';      /* 本机的机器人接入信息（appid + token + 名称） */
+
+/* 🔴 2026-10-11 修：原来这个 fetch **没有超时**，而且调用处写成
+   `catch(e){ r = null }` —— 把真实错误整个吞掉，最后统一显示
+   「连不上云端，检查网络后重试」。结果主公看到「网络不通」却看不出
+   到底哪里不通：是 DNS 没解析、被浏览器拦、还是云端真挂了。
+   现在：① 15 秒超时；② 失败时抛一个**带分类**的错误，让调用方能说人话。 */
+var CFG_TIMEOUT_MS = 15000;
+/* 把 fetch 的失败翻译成人能看懂的原因（浏览器只给一句 "Failed to fetch"） */
+function diagFetchErr(e, baseUrl){
+  var raw = String((e && e.message) || e || '');
+  var isAbort = (e && e.name === 'AbortError') || /abort/i.test(raw);
+  var proto = '', host = '';
+  try{ var u = new URL(baseUrl); proto = u.protocol; host = u.host; }catch(_){}
+  if(isAbort) return {
+    kind: 'timeout',
+    msg: '等了 ' + Math.round(CFG_TIMEOUT_MS/1000) + ' 秒云端没回应（多半是网络慢或被拦）。',
+    raw: raw
+  };
+  if(/failed to fetch|networkerror|typeerror/i.test(raw)){
+    /* 最常见的三种：混合内容、被插件/防火墙拦、地址写错 */
+    if(proto === 'http:' && location.protocol === 'https:') return {
+      kind: 'mixed',
+      msg: '地址是 http:// 而页面是 https://，浏览器会直接拦掉（混合内容）。把地址改成 https:// 开头。',
+      raw: raw
+    };
+    return {
+      kind: 'blocked',
+      msg: '浏览器没能发出这个请求。常见原因：<br>' +
+           '① 填的地址写错了（在「我的云函数」里点「保存并测试」验一下）；<br>' +
+           '② 广告拦截 / 隐私插件把 ' + (host || '这个域名') + ' 拦了（关掉插件再试）；<br>' +
+           '③ 校园网 / 防火墙挡了这个域名。',
+      raw: raw
+    };
+  }
+  return { kind: 'other', msg: raw, raw: raw };
+}
+/* 带超时的 POST JSON。失败时抛 {_diag:{kind,msg,raw}} */
+async function cloudPostJson(pathQ, obj){
+  var base = cloudBase();
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, CFG_TIMEOUT_MS) : null;
+  try{
+    var r = await fetch(base + pathQ, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(obj || {}),
+      ...(ctl ? { signal: ctl.signal } : {})
+    });
+    var txt = await r.text();
+    var j = null;
+    try{ j = JSON.parse(txt); }catch(e){ j = null; }
+    if(!j) return { ok:false, code:r.status, msg:'云端返回的不是 JSON（HTTP ' + r.status + '）' };
+    return j;
+  }catch(e){
+    var d = diagFetchErr(e, base);
+    var out = { ok:false, code:0, msg:d.msg, _diag:d };
+    return out;
+  }finally{
+    if(timer) clearTimeout(timer);
+  }
+}
+
 var botCloud = async function(action, obj){
-  var r = await fetch(cloudBase() + '/bot?action=' + encodeURIComponent(action), {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(obj || {})
-  });
-  return await r.json();
+  return await cloudPostJson('/bot?action=' + encodeURIComponent(action), obj);
 };
 /* 读本机存的机器人（没接就返回 null） */
 window.myBot = function(){
@@ -1431,21 +1488,133 @@ async function _antiCrawlGate(){
   }catch(e){}
   return false;
 }
-/* ============ 载入索引 ============ */
+/* ============ 载入索引 ============
+   🔴 2026-10-11 主公报「文库加载老半天」。根因：data/index.json 有 **7.7 MB**，
+      每次开页面都要整块下载 + 解密 + JSON.parse，慢的时候十几秒没动静，
+      屏幕上只有一句「加载中」，人以为卡死了。
+      两处改动：
+      ① **显示真实进度**（下了多少 MB / 一共多少），让人知道在动、还要多久；
+      ② **缓存到 IndexedDB**，第二次开页面直接读本地，秒开。
+         存的是**解密后的明文**（跟内存里那份一样，本来就会在内存里出现），
+         索引里没有群聊、没有姓名学号，只有书名和章节标题，可以放心落盘。 */
+const IDB_NAME = "sz2_idx", IDB_STORE = "blob", IDB_KEY = "index.json";
+function idbOpen(){
+  return new Promise(function(res, rej){
+    try{
+      var rq = indexedDB.open(IDB_NAME, 1);
+      rq.onupgradeneeded = function(){
+        var db = rq.result;
+        if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      rq.onsuccess = function(){ res(rq.result); };
+      rq.onerror = function(){ rej(rq.error || new Error("indexedDB open failed")); };
+    }catch(e){ rej(e); }
+  });
+}
+async function idbGet(k){
+  try{
+    var db = await idbOpen();
+    return await new Promise(function(res){
+      var tx = db.transaction(IDB_STORE, "readonly");
+      var rq = tx.objectStore(IDB_STORE).get(k);
+      rq.onsuccess = function(){ res(rq.result || null); };
+      rq.onerror = function(){ res(null); };
+    });
+  }catch(e){ return null; }
+}
+async function idbPut(k, v){
+  try{
+    var db = await idbOpen();
+    await new Promise(function(res){
+      var tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(v, k);
+      tx.oncomplete = function(){ res(true); };
+      tx.onerror = function(){ res(false); };
+    });
+  }catch(e){}
+}
+function fmtMB(n){ return (n/1048576).toFixed(1) + " MB"; }
+/* 带进度的下载：能拿到 Content-Length 就边下边报百分比 */
+async function fetchWithProgress(url, onProg){
+  var r = await fetch(url, {cache:"no-store"});
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  var total = Number(r.headers.get("Content-Length") || 0);
+  if(!r.body || !total){
+    var b0 = await r.arrayBuffer();
+    if(onProg) onProg(b0.byteLength, b0.byteLength);
+    return b0;
+  }
+  var rd = r.body.getReader(), chunks = [], got = 0;
+  while(true){
+    var d = await rd.read();
+    if(d.done) break;
+    chunks.push(d.value); got += d.value.length;
+    if(onProg) onProg(got, total);
+  }
+  var all = new Uint8Array(got), off = 0;
+  for(var i=0;i<chunks.length;i++){ all.set(chunks[i], off); off += chunks[i].length; }
+  return all.buffer;
+}
+function setLoadTxt(t){
+  var el = document.getElementById("loading");
+  if(el) el.textContent = t;
+}
 async function boot(){
   if(DOCS.length) return;
   try{
-    const buf = await (await fetch(IDX)).arrayBuffer();
-    const raw = new TextDecoder("utf-8").decode(await decBytes(INDEX_REL, buf, 0));
-    const j = JSON.parse(raw);
+    /* ① 先试着从本机缓存拿（第二次起就是这条路，秒开） */
+    var cached = await idbGet(IDB_KEY);
+    if(cached && cached.docs && cached.docs.length){
+      DOCS = cached.docs;
+      var n0 = DOCS.reduce(function(a,d){return a+d.s.length;},0);
+      var st0 = document.getElementById("stat");
+      if(st0) st0.textContent = DOCS.length + " 部文献 · " + n0 + " 章节";
+      renderChat(); buildSidebar();
+      /* 顺手在后台比对一下线上有没有更新（有就静默换掉，不打扰人） */
+      window._idxRefresh && window._idxRefresh();
+      return;
+    }
+    /* ② 没有缓存：下，并显示真实进度 */
+    setLoadTxt("正在载入索引…");
+    var buf = await fetchWithProgress(IDX, function(got, total){
+      if(total) setLoadTxt("正在载入索引… " + fmtMB(got) + " / " + fmtMB(total) +
+        "（" + Math.round(got/total*100) + "%）");
+      else setLoadTxt("正在载入索引… " + fmtMB(got));
+    });
+    setLoadTxt("正在解密索引…");
+    var raw = new TextDecoder("utf-8").decode(await decBytes(INDEX_REL, buf, 0));
+    setLoadTxt("正在解析索引…");
+    var j = JSON.parse(raw);
     DOCS = j.docs;
-    const n = DOCS.reduce((a,d)=>a+d.s.length,0);
+    var n = DOCS.reduce((a,d)=>a+d.s.length,0);
     document.getElementById("stat").textContent = `${DOCS.length} 部文献 · ${n} 章节`;
     renderChat(); buildSidebar();   /* 恢复上次会话；无历史则显示欢迎语 */
+    /* 存进本机，下次秒开 */
+    try{ await idbPut(IDB_KEY, { docs: DOCS, at: Date.now() }); }catch(e){}
   }catch(e){
     document.getElementById("loading").textContent = "索引载入失败：" + e.message;
   }
 }
+/* 后台静默刷新：缓存命中后，如果线上索引变了就换掉（不打断人阅读） */
+window._idxRefresh = async function(){
+  try{
+    var r = await fetch(IDX + "?probe=1", {method:"HEAD", cache:"no-store"});
+    var len = Number(r.headers.get("Content-Length") || 0);
+    var c = await idbGet(IDB_KEY);
+    if(c && c.len && len && c.len === len) return;      /* 体积没变，认为没更新 */
+    var buf = await fetchWithProgress(IDX, null);
+    var raw = new TextDecoder("utf-8").decode(await decBytes(INDEX_REL, buf, 0));
+    var j = JSON.parse(raw);
+    if(j && j.docs && j.docs.length){
+      DOCS = j.docs;
+      var n = DOCS.reduce(function(a,d){return a+d.s.length;},0);
+      var st = document.getElementById("stat");
+      if(st) st.textContent = DOCS.length + " 部文献 · " + n + " 章节";
+      buildSidebar();
+      try{ await idbPut(IDB_KEY, { docs: DOCS, at: Date.now(), len: buf.byteLength }); }catch(e){}
+    }
+  }catch(e){ /* 后台刷新失败无所谓，反正缓存那份能用 */ }
+};
 
 /* ============ 检索 ============ */
 function tokenize(q){
@@ -1917,7 +2086,6 @@ async function ask(opt){
             `<button class="iconbtn" onclick="TOOLS.diagram(this)">🧩 生成示意图</button>` +
             `<button class="iconbtn" onclick="TOOLS.quiz(this)">❓ 据此出题</button>` +
             `<button class="iconbtn" onclick="TOOLS.outline(this)">📚 据此处大纲</button>` +
-            `<button class="iconbtn" onclick="reaskAlt()" title="把上一个问题发到备用端点">🔁 换端点</button>` +
             `<button class="iconbtn" onclick="reaskRewrite()" title="自动改写成中性问法后重发">✎ 改写重问</button>`;
           b.parentElement.appendChild(barEl2);
         }
@@ -1982,7 +2150,6 @@ async function ask(opt){
       `<button class="iconbtn" onclick="TOOLS.diagram(this)">🧩 生成示意图</button>` +
       `<button class="iconbtn" onclick="TOOLS.quiz(this)">❓ 据此出题</button>` +
       `<button class="iconbtn" onclick="TOOLS.outline(this)">📚 据此处大纲</button>` +
-      `<button class="iconbtn" onclick="reaskAlt()" title="把上一个问题发到备用端点">🔁 换端点</button>` +
       `<button class="iconbtn" onclick="reaskRewrite()" title="自动改写成中性问法后重发">✎ 改写重问</button>`;
     b.parentElement.appendChild(barEl);
   }
@@ -1990,18 +2157,11 @@ async function ask(opt){
   if(acc.trim()) distill(q, acc, cfg);
 }
 
-/* ============ B+A：应对服务商内容审查 ============
-   B —— 换一个尺度不同的端点把同一问题再发一次；
-   A —— 用模型把问题改写成中性、去敏感措辞的问法后重发。 */
-
-/* B：把上一个问题发到备用端点 */
-function reaskAlt(){
-  if(busy) return;
-  if(!_lastQ){ alert("还没有可重问的问题"); return; }
-  const c2 = cfgOf("alt");
-  if(!c2.key || !c2.base){ openSet(); alert("请先在设置里填写「备用端点」的接口地址与 API Key"); return; }
-  ask({ q:_lastQ, which:"alt" });
-}
+/* ============ A：应对服务商内容审查 ============
+   🔴 2026-10-11 主公要求：去掉「🔁 换端点」这个按钮（原 B 方案）。
+      原来两个按钮并排，人容易点错，而且备用端点九成人没填，
+      点了就是弹一句「请先填备用端点」，纯属添乱。只留「✎ 改写重问」。 */
+/* 原 B 方案（reaskAlt）已按主公要求移除；下面的 A 方案（改写重问）保留。 */
 
 /* A 的底层：用某个端点把问题改写成中性问法（非流式，快） */
 async function rewriteWith(cfg, q){
@@ -3540,13 +3700,13 @@ window.botClaim = async function(){
   var appid = a ? a.value.trim() : "", secret = s ? s.value.trim() : "";
   if(!appid){ botMsg("先把 AppID 填上", "#c0392b"); return; }
   if(!secret){ botMsg("把 AppSecret 填上（QQ 后台「开发设置」里那串）", "#c0392b"); return; }
-  botMsg("正在核验凭据…", "var(--dim)");
+  botMsg("正在核验凭据…（最多等 " + Math.round(CFG_TIMEOUT_MS/1000) + " 秒）", "var(--dim)");
   var r = null;
   try{ r = await botCloud("claim", {
     appid: appid, secret: secret,
     school: sc ? sc.value.trim() : "",
     pubkey: k ? k.value.trim() : ""
-  }); }catch(e){ r = null; }
+  }); }catch(e){ r = { ok:false, code:0, msg:String((e && e.message) || e) }; }
   if(!r || !r.ok){
     /* 403 = 云函数白名单不认这个机器人。**这是正常的**（说明你填的是别人的函数），
        必须把话说明白，否则人会以为是凭据错了、反复重试。 */
@@ -3562,7 +3722,20 @@ window.botClaim = async function(){
         "#c0392b");
       return;
     }
-    botMsg("接入失败：" + ((r && r.msg) || "连不上云端，检查网络后重试"), "#c0392b");
+    /* 🔴 2026-10-11：别再说一句没用的「连不上云端」。
+       把云函数地址、诊断出来的原因、原始报错都摆出来，人才知道下一步该干嘛。 */
+    var d = (r && r._diag) || null;
+    var tail = "";
+    if(d){
+      tail = "<br><span style='opacity:.6;font-size:11px'>诊断：" + esc(d.kind || '') +
+             (d.raw ? " · " + esc(String(d.raw).slice(0,120)) : "") + "</span>";
+    }
+    botMsg(
+      "<b>接入失败。</b><br>" + ((r && r.msg) || "原因不明") + tail +
+      "<br><br><span style='opacity:.8'>当前连的是：<code style='word-break:break-all'>" +
+      esc(cloudBase()) + "</code></span><br>" +
+      "<span style='opacity:.8'>不对就去「设置 → 我的云函数」改，改完点「保存并测试」。</span>",
+      "#c0392b");
     return;
   }
   /* AppSecret 只在这一刻存在于内存，存完立刻从输入框清掉、落本机的只有 appid+token */
