@@ -150,10 +150,49 @@ print(hashlib.sha256((salt + &quot;::&quot; + pw).encode()).hexdigest())
 <ul>
 <li>进后台：网页上按 <b>Ctrl + Shift + A</b>，输管理员密码</li>
 </ul>
-<h3>Step 5 · 让同学能提问</h3>
-<p>把第二节的「怎么填 Key」发到班群。完事。</p>
-<hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
-<h2>四、把资料收进文库（入库）</h2>
+  <h3>Step 5 · 让同学能提问</h3>
+  <p>把第二节的「怎么填 Key」发到班群。完事。</p>
+  <hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+  <h2>三·B、接机器人？**请部署你自己的云函数**</h2>
+  <div class="warnbox">
+    <b>一句话：你的机器人走你的云函数，别蹭别人的。</b><br>
+    群消息是班级隐私，从头到尾不该经过别人的服务器 —— 技术上虽然能共用，
+    但「各用各的」才是干净做法。
+  </div>
+  <p>网页本身不需要云函数也能跑（看文库、问 AI 都行）。
+     <b>只有「把班群消息自动收进来」这一件事需要它。</b>要做，就照下面走。</p>
+  <h3>B1 · 下载部署包</h3>
+  <p><a href="./dl/云函数部署包.zip" download><b>📦 点这里下载「云函数部署包.zip」</b></a>
+     （含 <code>scf_bootstrap</code> / <code>server.js</code> / <code>handler.js</code> 和一份《部署说明.md》）</p>
+  <h3>B2 · 传到腾讯云（约 10 分钟）</h3>
+  <ol>
+    <li>打开 <code>console.cloud.tencent.com/scf</code> →「函数」→「新建」</li>
+    <li><b>函数类型必须选「Web 函数」</b>（选成事件函数收不到消息），运行环境 <code>Nodejs16.13</code></li>
+    <li>上传刚下载的 zip（<b>根目录直接是那三个文件</b>，别套文件夹）</li>
+    <li>建好后到「函数配置 → 环境变量」，填：<code>GH_TOKEN</code>、<code>GH_REPO_QQ</code>（你的<b>私有库</b>）、
+        <code>PUBLIC_BASE</code>（你函数地址，下一步拿到）</li>
+    <li>到「触发器」抄下你的函数网址，回填 <code>PUBLIC_BASE</code></li>
+  </ol>
+  <p class="pager">完整细节在包里的《部署说明.md》，照着做就行。</p>
+  <h3>B3 · 网页上认这台函数</h3>
+  <ol>
+    <li>打开你的文库网页 →「设置」→「<b>我的云函数</b>」，填你函数地址 →「保存并测试」</li>
+    <li>显示「✓ 探通了」即成功</li>
+    <li>往下「<b>我的机器人</b>」贴 AppID + AppSecret → 点「接入」→ 拿到一段<b>回调地址</b></li>
+    <li>把那段回调地址填到 <code>q.qq.com</code> 的「消息推送 / Webhook」，保存</li>
+  </ol>
+  <div class="okbox">
+    全程 <b>没有口令</b>：贴 AppID + AppSecret 就通。数据按你的 AppID 分文件存在<b>你自己的私有库</b>里，
+    别人读不到，你也读不到别人的。
+  </div>
+  <div class="note">
+    <b>想让全站都默认用你这台</b>（而不是只有你这台设备）？
+    在站点根目录放一个 <code>data/cloud.json</code>：
+    <pre><code>{ "cloud": "https://你的函数地址" }</code></pre>
+    没这个文件时，页面用本站原来的默认函数 —— 所以<b>不填也不会坏</b>。
+  </div>
+  <hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
+  <h2>四、把资料收进文库（入库）</h2>
 <h3>4.1 先理解结构</h3>
 <pre><code>
 网页版/lib/             ← 正文（markdown）
@@ -236,18 +275,18 @@ var PDFBASE = &quot;https://&lt;你的用户名&gt;.github.io/&lt;pdf仓库名&g
 <h2>六、隐私红线（不可协商）</h2>
 <p>如果你们也要收<b>群消息</b>，请先读这段：</p>
 <blockquote><b>群聊内容只落本机，绝不推进任何公开仓库。</b></blockquote>
-<p>具体做法：</p>
-<ol>
-<li>班群消息<b>不要</b>放进公开站的 <code>data/</code> 目录</li>
-<li>要给人看，就放在<b>私密仓库</b>或云函数的<b>口令页</b>（需口令才能读）</li>
-<li>收录前必须脱敏：<b>姓名、学号、手机号、身份证号</b>全去掉</li>
-<li>公开的仓库配置里加一条「红线自检」，防止手滑：</li>
-</ol>
-<ul>
-<li>本项目 <code>网页版/.github/workflows/sync-todo.yml</code> 里有一段示例逻辑</li>
-</ul>
-<p><b>为什么这么严</b>：GitHub Pages 是全网可读的，搜索引擎也会抓。</p>
-<p>班级群里的名字+学号一旦上网，是真实事故，不是吓唬人。</p>
+  <p>具体做法：</p>
+  <ol>
+    <li>班群消息<b>不要</b>放进公开站的 <code>data/</code> 目录</li>
+    <li>要给人看，就放在<b>自己的私有仓库</b>或云函数的令牌页（<b>各用各的云函数，别蹭别人的</b>）</li>
+    <li>收录前必须脱敏：<b>姓名、学号、手机号、身份证号</b>全去掉</li>
+    <li>公开的仓库配置里加一条「红线自检」，防止手滑：</li>
+  </ol>
+  <ul>
+    <li>本项目 <code>网页版/.github/workflows/sync-todo.yml</code> 里有一段示例逻辑</li>
+  </ul>
+  <p><b>为什么这么严</b>：GitHub Pages 是全网可读的，搜索引擎也会抓。</p>
+  <p>班级群里的名字+学号一旦上网，是真实事故，不是吓唬人。</p>
 <hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
 <h2>七、常见的坑</h2>
 <table>
@@ -273,6 +312,9 @@ var PDFBASE = &quot;https://&lt;你的用户名&gt;.github.io/&lt;pdf仓库名&g
 <li>[ ] 手机上打开排版正常</li>
 <li>[ ] <code>data/access.json</code> 里<b>没有</b>明文密码</li>
 <li>[ ] 公开仓库里<b>没有</b>任何班级群消息、姓名、学号</li>
+<li>[ ] 要收班群消息的话：<b>自己的</b>云函数已部署，网页「设置 → 我的云函数」显示「✓ 探通了」</li>
+<li>[ ] 自己的机器人已接入，回调地址（带 <code>?bot=你的AppID</code>）已填进 <code>q.qq.com</code> 并保存成功</li>
+<li>[ ] 群里发条消息，「待办 → 班群摘要」里能看到，<b>全程没输过口令</b></li>
 </ul>
 <hr style="border:0;border-top:1px dashed var(--line);margin:22px 0">
 <p>_仅作学术交流，不做商用。教材版权归原出版社所有，请支持正版。_</p>
