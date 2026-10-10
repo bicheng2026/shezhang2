@@ -3452,10 +3452,14 @@ window.cloudSaveFromSet = async function(){
     if(!confirm("这台函数没探通：\n" + u + "\n\n仍然保存？（不保存点「取消」）")) return;
   } else {
     if(msg){
-      msg.innerHTML = "✓ 探通了：<b>" + esc(u) + "</b>　（" +
-        (j.bots !== undefined ? ('已接入机器人 ' + j.bots + ' 台') : '正常') + "）<br>" +
+      msg.innerHTML = "✓ 探通了：<b>" + esc(u) + "</b>" +
+        (j.owner ? "　<span style='opacity:.8'>（" + esc(j.owner) + "）</span>" : "") + "<br>" +
+        (j.restricted
+          ? "<span style='color:#c0392b'>⚠ 这台函数设了<b>机器人白名单</b>，只服务它自己的机器人。" +
+            "你若不是它的主人，接机器人会被拒 —— 请部署你自己的。</span><br>"
+          : "") +
         "<span style='opacity:.8'>后面「我的机器人」接入就发到这台。</span>";
-      msg.style.color = "#059669";
+      msg.style.color = j.restricted ? "#c0392b" : "#059669";
     }
   }
   window.cloudSet(u);
@@ -3544,6 +3548,20 @@ window.botClaim = async function(){
     pubkey: k ? k.value.trim() : ""
   }); }catch(e){ r = null; }
   if(!r || !r.ok){
+    /* 403 = 云函数白名单不认这个机器人。**这是正常的**（说明你填的是别人的函数），
+       必须把话说明白，否则人会以为是凭据错了、反复重试。 */
+    if(r && r.code === 403){
+      botMsg(
+        "<b>这台云函数不是你的。</b><br>" +
+        "<span style='opacity:.85'>它只接收它自己的机器人，不替别人的班跑。</span><br><br>" +
+        "两条路：<br>" +
+        "① <b>用你自己的云函数</b>（推荐）：照「📦 自助部署指南 → 三·B」部署一台，" +
+        "在<b>设置 → 我的云函数</b>里填上地址，再回来接。<br>" +
+        "② <b>如果这台本来就是你的</b>：到腾讯云该函数的「函数配置 → 环境变量」，" +
+        "把 <code>BOT_ALLOW_APPIDS</code> 里加上你的 AppID（逗号分隔）。",
+        "#c0392b");
+      return;
+    }
     botMsg("接入失败：" + ((r && r.msg) || "连不上云端，检查网络后重试"), "#c0392b");
     return;
   }
