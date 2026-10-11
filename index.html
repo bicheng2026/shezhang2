@@ -4376,9 +4376,11 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     '<div class="ttabs">' +
       '<button id="tab-ann" class="on" onclick="szSwitchTab(0)">公告与待办</button>' +
       '<button id="tab-qq" onclick="szSwitchTab(1)">班群摘要</button>' +
+      '<button id="tab-kept" onclick="szSwitchTab(2)">📌 我存的</button>' +
     '</div>' +
     '<div class="body" id="todobody"><div class="empty">载入中…</div></div>' +
     '<div class="body" id="qqdigest" style="display:none"><div class="empty">载入中…</div></div>' +
+    '<div class="body" id="qqkept" style="display:none"><div class="empty">载入中…</div></div>' +
     '<div class="foot" id="todofoot"></div>';
   document.body.appendChild(dr);
 
@@ -4388,8 +4390,11 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var b = document.createElement("button");
     b.className = "iconbtn"; b.title = "待办与官网公告";
     b.innerHTML = '待办<span id="todocnt"></span>';
+    b.title = "待办 · 官网公告 · 班群摘要 · 我存的";
     b.onclick = function(){ toggleTodoDrawer(); };
     hdr.appendChild(b);
+    /* 启动时就把「已存多少条」显示出来（不用等打开抽屉） */
+    setTimeout(function(){ try{ window.qqKeptBadge && window.qqKeptBadge(); }catch(e){} }, 900);
   }
 
   window.toggleTodoDrawer = function(){
@@ -4432,6 +4437,231 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     try{ localStorage.setItem(QQ_HIDE, JSON.stringify(h)); }catch(e){}
     return h.length;
   }
+
+  /* ==================== 📌 存到本机（2026-10-11 主公要求）====================
+     主公原话：「加一个点一下可以彻底保留在本地的按钮，能够随时提醒随时看」。
+
+     为什么要这个：云端摘要是个**滚动窗口**（只留最近若干条），旧消息会被挤掉；
+     而班群里的通知（报名截止、考试安排、调课）恰恰是**过期也要能翻出来**的。
+     所以给一个「存到本机」：点一下就把这条**永久**留在本机浏览器里，
+     云端怎么滚、怎么清，都不影响你手上这份。
+
+     存在哪：**IndexedDB**（不是 localStorage）——
+       · localStorage 只有 5MB 且同步写、容易卡；IndexedDB 容量大得多、异步不卡；
+       · 存量数据放 IndexedDB 才经得起长期积累。
+     存什么：整条原样存（id / 时间 / 正文 / 截止日），不去重、不再裁剪。
+     隐私：只落**本机浏览器**，不上传、不进任何仓库 —— 与班群消息红线一致。 */
+  var KEPT_DB = "sz2_qq", KEPT_STORE = "kept";
+  function keptOpen(){
+    return new Promise(function(res, rej){
+      try{
+        var rq = indexedDB.open(KEPT_DB, 1);
+        rq.onupgradeneeded = function(){
+          var db = rq.result;
+          if(!db.objectStoreNames.contains(KEPT_STORE)) db.createObjectStore(KEPT_STORE, { keyPath: "id" });
+        };
+        rq.onsuccess = function(){ res(rq.result); };
+        rq.onerror = function(){ rej(rq.error || new Error("indexedDB 打开失败")); };
+      }catch(e){ rej(e); }
+    });
+  }
+  function keptAll(){
+    return new Promise(function(res){
+      keptOpen().then(function(db){
+        try{
+          var tx = db.transaction(KEPT_STORE, "readonly");
+          var rq = tx.objectStore(KEPT_STORE).getAll();
+          rq.onsuccess = function(){ res(rq.result || []); };
+          rq.onerror = function(){ res([]); };
+        }catch(e){ res([]); }
+      }).catch(function(){ res([]); });
+    });
+  }
+  function keptPutMany(items){
+    return new Promise(function(res){
+      keptOpen().then(function(db){
+        try{
+          var tx = db.transaction(KEPT_STORE, "readwrite");
+          var os = tx.objectStore(KEPT_STORE);
+          var n = 0;
+          items.forEach(function(it){
+            if(!it || !it.id) return;
+            os.put({                       /* put = 有则覆盖、无则新增，天然去重 */
+              id: String(it.id),
+              text: String(it.text || it.title || ""),
+              time: String(it.time || ""),
+              timeText: String(it.timeText || ""),
+              ts: Number(it.ts || 0),
+              ddl: String(it.ddl || ""),
+              appid: String(it.appid || ""),
+              keptAt: Date.now()
+            });
+            n++;
+          });
+          tx.oncomplete = function(){ res(n); };
+          tx.onerror = function(){ res(0); };
+        }catch(e){ res(0); }
+      }).catch(function(){ res(0); });
+    });
+  }
+  function keptDel(ids){
+    return new Promise(function(res){
+      keptOpen().then(function(db){
+        try{
+          var tx = db.transaction(KEPT_STORE, "readwrite");
+          var os = tx.objectStore(KEPT_STORE);
+          ids.forEach(function(i){ os.delete(String(i)); });
+          tx.oncomplete = function(){ res(true); };
+          tx.onerror = function(){ res(false); };
+        }catch(e){ res(false); }
+      }).catch(function(){ res(false); });
+    });
+  }
+  function keptClear(){
+    return new Promise(function(res){
+      keptOpen().then(function(db){
+        try{
+          var tx = db.transaction(KEPT_STORE, "readwrite");
+          tx.objectStore(KEPT_STORE).clear();
+          tx.oncomplete = function(){ res(true); };
+          tx.onerror = function(){ res(false); };
+        }catch(e){ res(false); }
+      }).catch(function(){ res(false); });
+    });
+  }
+  window._keptAll = keptAll; window._keptPutMany = keptPutMany;
+  window._keptDel = keptDel; window._keptClear = keptClear;
+
+  /* 存一条（消息卡片右上角那个 📌 用它） */
+  window.qqKeepOne = async function(id, btn){
+    var it = null;
+    try{ it = (_qqLastItems || []).filter(function(x){ return String(x.id) === String(id); })[0]; }catch(e){}
+    if(!it){ alert("这条已经不在当前列表里了，刷新后再试"); return; }
+    var n = await keptPutMany([it]);
+    if(btn){ btn.textContent = "✓ 已存"; btn.disabled = true; }
+    qqKeptBadge();
+    if(n) qqToast("已存到本机（永久保留，云端清了也不丢）");
+  };
+  /* 存勾选的若干条 */
+  window.qqKeepSelected = async function(){
+    var cks = document.querySelectorAll("#qqdigest .qqck:checked");
+    var ids = [];
+    cks.forEach(function(c){ if(c.value) ids.push(c.value); });
+    if(!ids.length){ alert("先勾选要保存的条目"); return; }
+    var arr = (_qqLastItems || []).filter(function(x){ return ids.indexOf(String(x.id)) >= 0; });
+    var n = await keptPutMany(arr);
+    qqKeptBadge();
+    qqToast("已存 " + n + " 条到本机");
+  };
+  /* 把当前列表全部存下来 */
+  window.qqKeepAll = async function(){
+    var arr = (_qqLastItems || []);
+    if(!arr.length){ alert("当前没有可保存的消息"); return; }
+    var n = await keptPutMany(arr);
+    qqKeptBadge();
+    qqToast("已把当前 " + n + " 条全部存到本机");
+  };
+  /* 顶部「待办」按钮上挂个小数字，随时知道存了多少 */
+  async function qqKeptBadge(){
+    var n = (await keptAll()).length;
+    var el = document.getElementById("todocnt");
+    if(el) el.textContent = n ? (" ·" + n) : "";
+    return n;
+  }
+  window.qqKeptBadge = qqKeptBadge;
+  /* 轻提示（不打断操作，2.2 秒自动消失） */
+  function qqToast(msg){
+    var d = document.createElement("div");
+    d.textContent = msg;
+    d.style.cssText = "position:fixed;left:50%;bottom:34px;transform:translateX(-50%);" +
+      "background:#111827;color:#fff;padding:9px 16px;border-radius:9px;font-size:13px;" +
+      "z-index:100000;box-shadow:0 6px 22px rgba(0,0,0,.28);opacity:0;transition:opacity .18s";
+    document.body.appendChild(d);
+    requestAnimationFrame(function(){ d.style.opacity = "1"; });
+    setTimeout(function(){
+      d.style.opacity = "0";
+      setTimeout(function(){ try{ d.remove(); }catch(e){} }, 260);
+    }, 2200);
+  }
+
+  /* 渲染「我存的」这一栏 */
+  window.renderKept = async function(){
+    var box = document.getElementById("qqkept");
+    if(!box) return;
+    var arr = await keptAll();
+    arr.sort(function(a, b){ return (b.ts || b.keptAt) - (a.ts || a.keptAt); });
+    if(!arr.length){
+      box.innerHTML = '<div class="empty">还没有存过消息<br>' +
+        '<span style="font-size:12px;opacity:.7">在「班群摘要」里点消息右上角的 📌，' +
+        '或勾选后点「📌 存到本机」。存下的东西只有你这台设备有，云端清了也不丢。</span></div>';
+      return;
+    }
+    var h = '<div style="font-size:12px;opacity:.72;margin:0 0 10px;display:flex;flex-wrap:wrap;' +
+            'gap:8px;align-items:center">' +
+              '<span>已存 <b style="color:var(--teal)">' + arr.length + '</b> 条 · 只在本机</span>' +
+              '<span style="flex:1"></span>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" ' +
+                'onclick="qqExportKept()">导出为文本</button>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px;border-color:#c0392b;' +
+                'color:#c0392b" onclick="qqClearKept()">全部清除</button>' +
+            '</div>' +
+            '<ul style="list-style:none;margin:0;padding:0">';
+    for(var i=0;i<arr.length;i++){
+      var it = arr[i];
+      h += '<li style="border-left:3px solid #d97706;padding:8px 11px;margin:0 0 8px;' +
+        'border-radius:0 7px 7px 0;background:rgba(217,119,6,.07);position:relative">' +
+        '<div style="font-size:11.5px;opacity:.65;margin-bottom:3px">' +
+          esc(it.timeText || (it.time || "").slice(5,16) || "") +
+          (it.keptAt ? ' · 存于 ' + new Date(it.keptAt).toLocaleDateString("zh-CN") : "") +
+        '</div>' +
+        '<div style="line-height:1.7;font-size:13.5px;white-space:pre-wrap;word-break:break-word;' +
+          'padding-right:46px">' + esc(it.text || "") + '</div>' +
+        (it.ddl ? '<div style="font-size:12px;color:#c0392b;margin-top:3px">截止 ' + esc(it.ddl) + '</div>' : '') +
+        '<button class="iconbtn" data-delkept="' + escAttr(String(it.id)) + '" ' +
+          'style="position:absolute;top:7px;right:7px;font-size:11px;padding:3px 7px">删除</button>' +
+        '</li>';
+    }
+    box.innerHTML = h + '</ul>';
+    box.querySelectorAll("[data-delkept]").forEach(function(b){
+      b.onclick = function(){ window.qqDelKept(b.getAttribute("data-delkept")); };
+    });
+  };
+  window.qqDelKept = async function(id){
+    if(!confirm("从本机删掉这条？删了找不回来（云端如果还留着，可以去班群摘要重新存）。")) return;
+    await keptDel([id]);
+    window.renderKept(); qqKeptBadge();
+  };
+  window.qqClearKept = async function(){
+    var n = (await keptAll()).length;
+    if(!n) return;
+    if(!confirm("清空全部 " + n + " 条本地留存？\n\n这是不可恢复的删除，导出的备份不受影响。")) return;
+    await keptClear();
+    window.renderKept(); qqKeptBadge();
+  };
+  /* 导出为纯文本，方便备份 / 打印 / 转到别处 */
+  window.qqExportKept = async function(){
+    var arr = await keptAll();
+    if(!arr.length){ alert("还没有存过消息"); return; }
+    arr.sort(function(a, b){ return (a.ts || a.keptAt) - (b.ts || b.keptAt); });
+    var t = "蛇杖二号 · 班群消息本地留存（" + arr.length + " 条）\n" +
+            "导出时间：" + new Date().toLocaleString("zh-CN") + "\n" +
+            "说明：内容已脱敏（不含姓名/学号/手机号）。\n" +
+            "".padEnd(56, "=") + "\n\n";
+    arr.forEach(function(it){
+      t += "[" + (it.timeText || it.time || "") + "]";
+      if(it.ddl) t += "（截止 " + it.ddl + "）";
+      t += "\n" + (it.text || "") + "\n\n";
+    });
+    var blob = new Blob([t], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "班群消息留存-" + new Date().toISOString().slice(0,10) + ".txt";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1200);
+  };
+  /* 当前列表缓存一份，供「存到本机」按 id 找原条 */
+  var _qqLastItems = [];
+  window._qqSetLastItems = function(a){ _qqLastItems = Array.isArray(a) ? a : []; };
 
   function qqSaved(){
     try{
@@ -4495,7 +4725,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     if(!box) return;
     if(!tok){ qqAskPw(""); return; }
     box.innerHTML = '<div class="empty">正在取班群消息…</div>';
-    fetch(QQ_CF + "/qq?limit=60&t=" + encodeURIComponent(tok), {cache: "no-store"})
+    fetch(QQ_CF + "/qq?limit=300&t=" + encodeURIComponent(tok), {cache: "no-store"})
       .then(function(r){
         if(r.status === 401) throw new Error("TOKEN");
         if(!r.ok) throw new Error("HTTP " + r.status);
@@ -4541,6 +4771,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var hid = qqHidden();
     var all = j.items || [];
     var vis = all.filter(function(x){ return hid.indexOf(String(x.id || "")) < 0; });
+    window._qqSetLastItems(vis);   /* 供「存到本机」按 id 取原条 */
 
     if(!vis.length){
       box.innerHTML = '<div class="empty">这 ' + all.length + ' 条都被你隐藏了<br>' +
@@ -4554,6 +4785,10 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
                 (hid.length ? '（已隐藏 ' + hid.length + '）' : '') + '</span>' +
               '<span style="flex:1"></span>' +
               '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" onclick="qqToggleAll()">全选/取消</button>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px;border-color:#d97706;' +
+                'color:#b45309;font-weight:600" onclick="qqKeepSelected()">📌 存勾选的</button>' +
+              '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" ' +
+                'onclick="qqKeepAll()">📌 存全部</button>' +
               '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px;border-color:#c0392b;color:#c0392b" ' +
                 'onclick="qqDeleteSelected()">隐藏勾选</button>' +
               (hid.length ? '<button class="iconbtn" style="font-size:11.5px;padding:4px 9px" ' +
@@ -4561,7 +4796,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
               '<a href="javascript:window.qqForgetAndAsk()" style="color:var(--dim);font-size:11.5px">换个身份</a>' +
             '</div>' +
             '<div style="font-size:11px;opacity:.5;margin:-4px 0 10px">' +
-              '「隐藏」只影响你这台设备，云端和其他同学都不受影响。</div>' +
+              '「隐藏」只影响你这台设备；「📌 存」把消息永久留在本机，云端清了也不丢。</div>' +
             '<ul style="list-style:none;margin:0;padding:0">';
     for(var i=0;i<vis.length;i++){
       var it = vis[i];
@@ -4575,9 +4810,20 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
           '<div style="line-height:1.7;font-size:13.5px;white-space:pre-wrap;word-break:break-word">' +
             esc(it.text || it.title || "") + '</div>' +
           (it.ddl ? '<div style="font-size:12px;color:#c0392b;margin-top:3px">截止 ' + esc(it.ddl) + '</div>' : '') +
-        '</div></li>';
+        '</div>' +
+        /* 单条「存到本机」——点一下就永久留下，不用先勾选。
+           用 data-* 传 id + 统一事件绑定，避免在 onclick 里拼引号（拼错过一次）。 */
+        '<button class="iconbtn qqpin" data-keep="' + escAttr(String(it.id || "")) + '" ' +
+          'title="存到本机（永久保留，云端清了也不丢）" ' +
+          'style="flex-shrink:0;font-size:11px;padding:3px 8px;border-color:#d97706;color:#b45309">📌 存</button>' +
+        '</li>';
     }
     box.innerHTML = h + '</ul>';
+    /* 统一绑定「📌 存」 */
+    box.querySelectorAll("[data-keep]").forEach(function(b){
+      b.onclick = function(){ window.qqKeepOne(b.getAttribute("data-keep"), b); };
+    });
+    window.qqKeptBadge();   /* 顺手刷新「待办」上的计数 */
   }
 
   /* 全选 / 取消全选 */
@@ -4591,6 +4837,11 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
 
   /* 「删掉」= 只在本机隐藏，**云端不动**（2026-10-07 主公明确）。
      不需要管理员密码、不影响其他同学；随时可以「恢复」找回来。 */
+  /* 🔴 2026-10-11 修：这里原来写的是 `qqFetch(qqSaved(), true)` ——
+     qqSaved() 只读**老口令**（sz2_qq_tok），而主路是**机器人令牌**（sz2_bot）。
+     接了机器人但没输过老口令的人，qqSaved() 返回空串 → qqFetch("") →
+     qqAskPw("") → 界面跳回「去接入我的机器人」，看起来就像「隐藏一下就把我踢出去了」。
+     正确做法：跟别处一致，用 **qqToken()**（令牌优先、老口令兜底）。 */
   window.qqDeleteSelected = function(){
     var cks = document.querySelectorAll("#qqdigest .qqck:checked");
     if(!cks.length){ alert("先勾选要隐藏的条目"); return; }
@@ -4599,7 +4850,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     if(!ids.length){ alert("这些条目缺 id，无法隐藏"); return; }
     if(!confirm("把这 " + ids.length + " 条从**你的页面**隐藏？\n\n只影响你这台设备，云端和其他同学都不受影响，随时可恢复。")) return;
     qqHide(ids);
-    window.qqFetch(qqSaved(), true);   /* 重新渲染，被隐藏的就不显示了 */
+    window.qqFetch(qqToken(), true);   /* 重新渲染，被隐藏的就不显示了 */
   };
   /* 恢复全部隐藏 */
   window.qqUnhideAll = function(){
@@ -4607,7 +4858,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     if(!n){ alert("没有隐藏的条目"); return; }
     if(!confirm("把之前隐藏的 " + n + " 条全部显示回来？")) return;
     try{ localStorage.removeItem(QQ_HIDE); }catch(e){}
-    window.qqFetch(qqSaved(), true);
+    window.qqFetch(qqToken(), true);   /* 同上：必须用 qqToken() */
   };
   /* 换个身份 = 先清掉本机机器人接入 + 老口令，再回到接入界面（2026-10-08 改口径） */
   window.qqForgetAndAsk = function(){
@@ -4616,27 +4867,37 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     qqAskPw("");
   };
 
-  window.loadQqDigest = function(){
+  window.loadQqDigest = function(force){
     var box = document.getElementById("qqdigest");
     if(!box) return;
-    if(box.getAttribute("data-on") === "1") return;   /* 已经渲染过就别重刷 */
+    /* 🔴 2026-10-11 修：原来这里是 `if(data-on==="1") return;`，**完全无视 force 参数**，
+       于是抽屉顶部那个「刷新」按钮点了等于没点（第二次进来永远不再拉取）。
+       现在 force=true 时先清标记再拉。 */
+    if(!force && box.getAttribute("data-on") === "1") return;
     box.setAttribute("data-on", "1");
     var t = qqToken();          /* 机器人令牌优先，其次老口令 */
     if(t) window.qqFetch(t);
     else qqAskPw("");
   };
+  /* 三个 Tab：0=公告与待办 / 1=班群摘要 / 2=📌 我存的 */
   window.szSwitchTab = function(n){
-    var a = document.getElementById("todobody"), b = document.getElementById("qqdigest");
-    var ta = document.getElementById("tab-ann"), tb = document.getElementById("tab-qq");
-    if(!a || !b) return;
-    if(n === 1){
-      a.style.display = "none"; b.style.display = "block";
-      if(ta) ta.className = ""; if(tb) tb.className = "on";
-      window.loadQqDigest();
-    } else {
-      a.style.display = "block"; b.style.display = "none";
-      if(ta) ta.className = "on"; if(tb) tb.className = "";
-    }
+    var bodies = [
+      document.getElementById("todobody"),
+      document.getElementById("qqdigest"),
+      document.getElementById("qqkept")
+    ];
+    var tabs = [
+      document.getElementById("tab-ann"),
+      document.getElementById("tab-qq"),
+      document.getElementById("tab-kept")
+    ];
+    if(!bodies[0]) return;
+    bodies.forEach(function(el, i){ if(el) el.style.display = (i === n) ? "block" : "none"; });
+    tabs.forEach(function(el, i){ if(el) el.className = (i === n) ? "on" : ""; });
+    if(n === 1) window.loadQqDigest();
+    if(n === 2) window.renderKept();
+    /* 「我存的」这一栏每次切过去都重算（刚存过的东西要立刻看到） */
+    window.qqKeptBadge && window.qqKeptBadge();
   };
 
   var cache = null;
