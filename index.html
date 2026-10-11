@@ -463,17 +463,6 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <div class="hint">默认 deepseek-flash（便宜、支持自主调工具；实测两个模型均已开启智能检索能力）。开「深度思考」时，若下方填了思考模型就用它，否则沿用当前模型并开启推理。</div>
     <div class="hint">推荐 DeepSeek（便宜好用）；也支持智谱、通义、OpenAI、本地 Ollama 等兼容接口。</div>
     <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-    <div style="font-size:13px;color:var(--teal);margin:0 0 4px">备用端点（被审查拦截时一键换用）</div>
-    <label>备用接口地址</label>
-    <input id="base2" placeholder="https://open.bigmodel.cn/api/paas/v4">
-    <label>备用 API Key</label>
-    <div style="display:flex;gap:6px">
-      <input id="key2" type="password" placeholder="sk-..." autocomplete="new-password" autocapitalize="off" spellcheck="false" style="flex:1">
-      <button type="button" class="iconbtn" style="flex-shrink:0" onclick="TOOLS.eye('key2',this)" title="显示 / 隐藏">👁</button>
-    </div>
-    <label>备用模型名</label>
-    <input id="model2" placeholder="glm-4.7">
-    <div class="hint">备用端点填好后会作为主链路失败时的自动替补（各家尺度不同，此路不通走彼路）。备用 Key 与主链路同样只存本机浏览器。</div>
     <label style="display:flex;align-items:flex-start;gap:8px;color:var(--ink);margin:12px 0 5px">
       <input type="checkbox" id="thinksw" onchange="setThink(this.checked)" style="width:auto;flex-shrink:0;margin-top:4px">
       <span>默认开启深度思考<br><span style="color:var(--dim);font-size:11.5px">也可以在输入框直接敲 <b>/think</b> 随时切换</span></span>
@@ -1888,13 +1877,12 @@ function addMsg(who, html, cls){
 }
 const esc = s => s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 
-/* 读取某套端点的配置：which = "pri"（主，默认）或 "alt"（备用） */
-function cfgOf(which){
-  const alt = which === "alt";
+/* 读取端点配置（2026-10-11：备用端点已按主公要求整块移除，这里只剩主链路） */
+function cfgOf(){
   return {
-    base: (localStorage.getItem(alt?"sz2_base2":"sz2_base")||(alt?"":"https://api.deepseek.com/v1")).replace(/\/$/,""),
-    key : localStorage.getItem(alt?"sz2_key2":"sz2_key")||"",
-    mdl : localStorage.getItem(alt?"sz2_model2":"sz2_model")||(alt?"":"deepseek-flash")
+    base: (localStorage.getItem("sz2_base")||"https://api.deepseek.com/v1").replace(/\/$/,""),
+    key : localStorage.getItem("sz2_key")||"",
+    mdl : localStorage.getItem("sz2_model")||"deepseek-flash"
   };
 }
 let _lastQ = "";
@@ -1902,7 +1890,6 @@ let _lastQ = "";
 async function ask(opt){
   if(busy) return;
   opt = opt || {};
-  const which = opt.which === "alt" ? "alt" : "pri";
   const el = document.getElementById("q");
   const fromInput = (opt.q == null);
   /* 来自输入框的内容先看是不是斜杠命令（/think /net /quiz /outline /draw /help） */
@@ -1912,12 +1899,12 @@ async function ask(opt){
   }
   const q = fromInput ? el.value.trim() : String(opt.q).trim();
   if(!q) return;
-  const cfg = cfgOf(which);
-  if(!cfg.key){ openSet(); alert(which==="alt" ? "请先在设置里填写「备用端点」的接口地址与 API Key" : "请先在设置里填写 API Key"); return; }
+  const cfg = cfgOf();
+  if(!cfg.key){ openSet(); alert("请先在设置里填写 API Key"); return; }
   const think = localStorage.getItem("sz2_think")==="1";
   /* 深度思考：默认沿用当前模型并开启推理；仅在设置里指定了思考模型时才换模型 */
   const thinkMdl = (localStorage.getItem("sz2_mdlthink")||"").trim();
-  const mdl = (which==="pri" && think && thinkMdl) ? thinkMdl : cfg.mdl;
+  const mdl = (think && thinkMdl) ? thinkMdl : cfg.mdl;
   /* 任务模式（问答 / 出题 / 大纲 / 示意图）与附件 */
   const mode = (opt.mode !== undefined) ? opt.mode : _mode;
   const atts = (opt.atts !== undefined) ? opt.atts : TOOLS.atts.slice();
@@ -1943,9 +1930,7 @@ async function ask(opt){
   busy = true; document.getElementById("send").disabled = true;
 
   _lastQ = q;
-  if(which === "alt"){
-    addMsg("系统", `🔁 已改用备用端点重发 · ${esc(cfg.mdl)}`, "sys");
-  } else {
+  {
     const mini = atts.map(a=>a.kind==="image"
         ? `<img src="${a.data}" style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid var(--line);margin:6px 6px 0 0">`
         : `<span style="display:inline-block;font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:8px;padding:3px 8px;margin:6px 6px 0 0">📄 ${esc(a.name)}</span>`).join("");
@@ -2186,22 +2171,20 @@ async function rewriteWith(cfg, q){
   const j = await r.json();
   return String(j.choices?.[0]?.message?.content||"").trim().replace(/^["'「『]+|["'」』]+$/g,"").trim();
 }
-/* A：改写后重发 */
+/* A：改写后重发（2026-10-11：备用端点已移除，只用主链路做改写） */
 async function reaskRewrite(){
   if(busy) return;
   if(!_lastQ){ alert("还没有可重问的问题"); return; }
-  let rw = "", usedWhich = "pri";
-  for(const which of ["pri","alt"]){
-    const c = cfgOf(which);
-    if(!c.key || !c.base) continue;
-    try{
-      const out = await rewriteWith(c, _lastQ);
-      if(out && out.length >= 4){ rw = out; usedWhich = which; break; }
-    }catch(e){}
-  }
+  let rw = "";
+  const c = cfgOf();
+  if(!c.key || !c.base){ openSet(); alert("请先在设置里填写接口地址与 API Key"); return; }
+  try{
+    const out = await rewriteWith(c, _lastQ);
+    if(out && out.length >= 4) rw = out;
+  }catch(e){}
   if(!rw){ alert("改写失败：请检查接口地址与 Key 是否可用"); return; }
   addMsg("蛇杖二号", `<b>✎ 已改写为中性问法：</b><div>${esc(rw)}</div>`, "net");
-  await ask({ q:rw, which:usedWhich });
+  await ask({ q: rw });
 }
 
 function applyFont(){
@@ -2215,10 +2198,9 @@ function applyModel(){
   const on = localStorage.getItem("sz2_think")==="1";
   const m = localStorage.getItem("sz2_model")||"deepseek-flash";
   const tm = (localStorage.getItem("sz2_mdlthink")||"").trim();
-  const alt = localStorage.getItem("sz2_model2")||"";
-  const hasAlt = !!(localStorage.getItem("sz2_key2")||"").trim();
   const el = document.getElementById("curmodel");
-  if(el) el.textContent = "中继：" + (on && tm ? tm : m) + (on ? "（深度思考）" : "") + (hasAlt ? " ｜ 备用：" + (alt||"—") : "");
+  /* 2026-10-11：去掉「｜ 备用：xxx」那一截 —— 备用端点已整块移除，别再显示死信息。 */
+  if(el) el.textContent = "中继：" + (on && tm ? tm : m) + (on ? "（深度思考）" : "");
 }
 function applyThink(){
   const on = localStorage.getItem("sz2_think")==="1";
@@ -3556,9 +3538,6 @@ function openSet(){
   document.getElementById("base").value = localStorage.getItem("sz2_base")||"https://api.deepseek.com/v1";
   document.getElementById("key").value = localStorage.getItem("sz2_key")||"";
   document.getElementById("model").value = localStorage.getItem("sz2_model")||"deepseek-flash";
-  document.getElementById("base2").value = localStorage.getItem("sz2_base2")||"";
-  document.getElementById("key2").value  = localStorage.getItem("sz2_key2")||"";
-  document.getElementById("model2").value= localStorage.getItem("sz2_model2")||"";
   document.getElementById("mdlthink").value = localStorage.getItem("sz2_mdlthink")||"";
   document.getElementById("vmodel").value = localStorage.getItem("sz2_vmodel")||"";
   document.getElementById("dmodel").value = localStorage.getItem("sz2_dmodel")||"";
@@ -3807,9 +3786,8 @@ async function clearLocal(){
 async function saveSet(){
   /* 保存前做一次「填错栏」体检 —— 最常见的错误是把网址粘进 Key、把密钥粘进接口地址 */
   const _k = document.getElementById("key").value.trim();
-  const _k2 = document.getElementById("key2").value.trim();
   const _base = document.getElementById("base").value.trim();
-  for(const [name, v] of [["API Key", _k], ["备用 API Key", _k2]]){
+  for(const [name, v] of [["API Key", _k]]){
     if(v && (/^https?:\/\//i.test(v) || /\/$/.test(v))){
       if(!confirm(`⚠ 「${name}」里填的内容是：\n\n${v.slice(0,90)}\n\n这看起来是网址而不是密钥。API Key 一般以 sk- 开头。\n\n仍然保存吗？（建议先改成正确的 Key）`)) return;
     }
@@ -3820,9 +3798,6 @@ async function saveSet(){
   localStorage.setItem("sz2_base", document.getElementById("base").value.trim());
   localStorage.setItem("sz2_key",  document.getElementById("key").value.trim());
   localStorage.setItem("sz2_model",document.getElementById("model").value.trim());
-  localStorage.setItem("sz2_base2", document.getElementById("base2").value.trim());
-  localStorage.setItem("sz2_key2",  document.getElementById("key2").value.trim());
-  localStorage.setItem("sz2_model2",document.getElementById("model2").value.trim());
   localStorage.setItem("sz2_mdlthink", document.getElementById("mdlthink").value.trim());
   localStorage.setItem("sz2_vmodel", document.getElementById("vmodel").value.trim());
   localStorage.setItem("sz2_dmodel", document.getElementById("dmodel").value.trim());
