@@ -845,17 +845,24 @@ var BOT_KEY = 'sz2_bot';      /* 本机的机器人接入信息（appid + token 
    `catch(e){ r = null }` —— 把真实错误整个吞掉，最后统一显示
    「连不上云端，检查网络后重试」。结果主公看到「网络不通」却看不出
    到底哪里不通：是 DNS 没解析、被浏览器拦、还是云端真挂了。
-   现在：① 15 秒超时；② 失败时抛一个**带分类**的错误，让调用方能说人话。 */
-var CFG_TIMEOUT_MS = 15000;
+   现在：① 15 秒超时；② 失败时抛一个**带分类**的错误，让调用方能说人话。
+
+   🔴 2026-10-11 血的教训：这三个新东西原来写的是 `var/function`，
+      而它们落在**第 1 段 `<script>`**（569 行起），可 `botClaim` 在
+      **第 2 段 `<script>`**（1249 行起）—— **两段是独立作用域，读不到彼此**。
+      结果 botClaim 第一句 `CFG_TIMEOUT_MS` 就抛 ReferenceError，
+      函数当场挂掉，连「正在核验凭据…」都没写出来 → 主公看到的就是「点了没反应」。
+      ⇒ 凡是**要跨两段脚本**用的，**必须挂 window**。这里已全部挂上。 */
+window.CFG_TIMEOUT_MS = 15000;
 /* 把 fetch 的失败翻译成人能看懂的原因（浏览器只给一句 "Failed to fetch"） */
-function diagFetchErr(e, baseUrl){
+window.diagFetchErr = function(e, baseUrl){
   var raw = String((e && e.message) || e || '');
   var isAbort = (e && e.name === 'AbortError') || /abort/i.test(raw);
   var proto = '', host = '';
   try{ var u = new URL(baseUrl); proto = u.protocol; host = u.host; }catch(_){}
   if(isAbort) return {
     kind: 'timeout',
-    msg: '等了 ' + Math.round(CFG_TIMEOUT_MS/1000) + ' 秒云端没回应（多半是网络慢或被拦）。',
+    msg: '等了 ' + Math.round(window.CFG_TIMEOUT_MS/1000) + ' 秒云端没回应（多半是网络慢或被拦）。',
     raw: raw
   };
   if(/failed to fetch|networkerror|typeerror/i.test(raw)){
@@ -875,12 +882,12 @@ function diagFetchErr(e, baseUrl){
     };
   }
   return { kind: 'other', msg: raw, raw: raw };
-}
-/* 带超时的 POST JSON。失败时抛 {_diag:{kind,msg,raw}} */
-async function cloudPostJson(pathQ, obj){
+};
+/* 带超时的 POST JSON。失败时抛 {_diag:{kind,msg,raw}} —— 挂 window 供第 2 段脚本调用 */
+window.cloudPostJson = async function(pathQ, obj){
   var base = cloudBase();
   var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var timer = ctl ? setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, CFG_TIMEOUT_MS) : null;
+  var timer = ctl ? setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, window.CFG_TIMEOUT_MS) : null;
   try{
     var r = await fetch(base + pathQ, {
       method: 'POST',
@@ -894,16 +901,17 @@ async function cloudPostJson(pathQ, obj){
     if(!j) return { ok:false, code:r.status, msg:'云端返回的不是 JSON（HTTP ' + r.status + '）' };
     return j;
   }catch(e){
-    var d = diagFetchErr(e, base);
+    var d = window.diagFetchErr(e, base);
     var out = { ok:false, code:0, msg:d.msg, _diag:d };
     return out;
   }finally{
     if(timer) clearTimeout(timer);
   }
-}
+};
 
-var botCloud = async function(action, obj){
-  return await cloudPostJson('/bot?action=' + encodeURIComponent(action), obj);
+/* botCloud 也要挂 window —— botClaim 在**第 2 段脚本**里调用它 */
+window.botCloud = async function(action, obj){
+  return await window.cloudPostJson('/bot?action=' + encodeURIComponent(action), obj);
 };
 /* 读本机存的机器人（没接就返回 null） */
 window.myBot = function(){
@@ -913,9 +921,9 @@ window.myBot = function(){
   }catch(e){ return null; }
 };
 /* 接入后本机记下来 —— 令牌长期有效，除非本人点「换发令牌」 */
-function saveMyBot(o){
+window.saveMyBot = function(o){
   try{ localStorage.setItem(BOT_KEY, JSON.stringify(o)); }catch(e){}
-}
+};
 window.forgetMyBot = function(){
   try{ localStorage.removeItem(BOT_KEY); }catch(e){}
 };
@@ -3700,9 +3708,9 @@ window.botClaim = async function(){
   var appid = a ? a.value.trim() : "", secret = s ? s.value.trim() : "";
   if(!appid){ botMsg("先把 AppID 填上", "#c0392b"); return; }
   if(!secret){ botMsg("把 AppSecret 填上（QQ 后台「开发设置」里那串）", "#c0392b"); return; }
-  botMsg("正在核验凭据…（最多等 " + Math.round(CFG_TIMEOUT_MS/1000) + " 秒）", "var(--dim)");
+  botMsg("正在核验凭据…（最多等 " + Math.round(window.CFG_TIMEOUT_MS/1000) + " 秒）", "var(--dim)");
   var r = null;
-  try{ r = await botCloud("claim", {
+  try{ r = await window.botCloud("claim", {
     appid: appid, secret: secret,
     school: sc ? sc.value.trim() : "",
     pubkey: k ? k.value.trim() : ""
@@ -3740,7 +3748,7 @@ window.botClaim = async function(){
   }
   /* AppSecret 只在这一刻存在于内存，存完立刻从输入框清掉、落本机的只有 appid+token */
   if(s) s.value = "";
-  saveMyBot({ appid: r.appid, token: r.token, school: (sc && sc.value.trim()) || "" });
+  window.saveMyBot({ appid: r.appid, token: r.token, school: (sc && sc.value.trim()) || "" });
   window.renderBotBox();
   botMsg((r.verified ? "✓ 接入成功，凭据已核验。" : "✓ 已接入（云端暂未联网核验，请自行确认凭据无误）。") +
     "<br>回调地址：<code style='word-break:break-all'>" + esc(r.callback || "") + "</code>" +
@@ -3753,7 +3761,7 @@ window.botCheck = async function(){
   if(!mine){ window.renderBotBox(); return; }
   botMsg("查询中…", "var(--dim)");
   var r = null;
-  try{ r = await botCloud("info", { token: mine.token }); }catch(e){ r = null; }
+  try{ r = await window.botCloud("info", { token: mine.token }); }catch(e){ r = null; }
   if(!r || !r.ok){
     if(r && r.code === 401){
       var m2 = document.getElementById("botmsg");
@@ -3779,9 +3787,9 @@ window.botSwap = async function(){
   if(!mine) return;
   if(!confirm("换发后旧令牌立即失效，其他设备上用同一个机器人接入的页面需要重新接一次。\n（云端数据不受影响）确定吗？")) return;
   var r = null;
-  try{ r = await botCloud("revoke", { token: mine.token }); }catch(e){ r = null; }
+  try{ r = await window.botCloud("revoke", { token: mine.token }); }catch(e){ r = null; }
   if(!r || !r.ok){ botMsg("换发失败：" + ((r && r.msg) || "连不上云端"), "#c0392b"); return; }
-  saveMyBot(Object.assign({}, mine, { token: r.token }));
+  window.saveMyBot(Object.assign({}, mine, { token: r.token }));
   botMsg("已换发新令牌（旧的下次请求就失效）。", "#059669");
 };
 window.botForget = function(){
