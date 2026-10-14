@@ -392,16 +392,20 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--ink);line-height:1.6">
       <input type="checkbox" id="netsw" onchange="NET.setSw(this.checked)" style="width:auto;margin:3px 0 0;flex-shrink:0">
-      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">每轮提问自动并发检索，6 秒硬超时；超时或不通则自动跳过，不影响文库问答。</span></span>
+      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">每轮提问自动并发检索，数秒硬超时；超时或不通则自动跳过，不影响文库问答。</span></span>
     </label>
 
     <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">联网信息来源</div>
     <div class="hint" style="margin:0 0 6px;line-height:1.8">
-      <b style="color:#7fb069">一条 Key 都不用填</b> —— <b>「全网搜索」</b>走本站云函数，服务端实时搜 360 / 必应，中英文都行，免 Key、国内直连、手机也能用。<br>
+      <b style="color:#7fb069">一条 Key 都不用填</b> —— <b>「全网搜索」</b>由本站自己的云函数在服务端实时搜 360 / 必应，中英文都行、国内直连、手机也能用。<br>
       校园公告另走「待办」的<b>实时抓取</b>（不经搜索引擎）。<br>
-      <span style="opacity:.8">博查 / 智谱是<b>可选加强</b>；维基百科 / Jina 需科学上网。都不填也完全能用。</span>
+      <span style="opacity:.8">维基百科 / Jina / 必应属境外通道，需科学上网；不开也完全能用。</span>
     </div>
-    <div class="hint" style="margin:0 0 8px;line-height:1.8">每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索。免 Key 通道里显示「通」的就能用。</div>
+    <div class="hint" style="margin:0 0 8px;line-height:1.8">
+      每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索。<br>
+      <b style="color:#e07a6a">「全网搜索」要求本站配有自己的云函数</b>（<code>data/cloud.json</code> 的 <code>cloud</code> 字段）；
+      没配时该通道自动关闭，<b>绝不会借用别人的云函数</b>。
+    </div>
     <div id="netlist"></div>
 
     <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">校园网内网（可选）</div>
@@ -795,6 +799,20 @@ function cloudBase(){
   return CLOUD_URL || CLOUD_FALLBACK;
 }
 window.cloudBase = cloudBase;
+/* 🔒 云函数「归属判定」（2026-10-14）：当前生效的云函数，到底是不是本站自己的？
+   用途：防止「别人抄了这套网页部署、却没配自己的云函数」时，联网搜索/校园抓取
+        打到**站长的**云函数上（白嫖站长的调用额度）。
+   只要不属于自己 → 前端**根本不发起**请求（0 消耗）。
+   分发版：把 SITE_HOSTS 改成你自己的 Pages 域名（或只靠 data/cloud.json 声明）。 */
+var SITE_HOSTS = ['bicheng2026.github.io'];
+function cloudIsOwn(){
+  var h = String(location.hostname || '');
+  if(!h || h === '127.0.0.1' || h === 'localhost') return true;   /* 本机打开（含校园网代理） */
+  if(SITE_HOSTS.indexOf(h) >= 0) return true;                     /* 站长自己的站 */
+  try{ if(normCloud(localStorage.getItem('sz2_cloud'))) return true; }catch(e){}
+  return !!(CLOUD_URL && CLOUD_URL !== CLOUD_FALLBACK);           /* 站点 data/cloud.json 配过自己的函数 */
+}
+window.cloudIsOwn = cloudIsOwn;
 window.cloudSet = function(u){
   u = normCloud(u);
   try{
@@ -3157,12 +3175,9 @@ const WIKI_ZH = "https://zh.wikipedia.org/w/api.php";
 const WIKI_EN = "https://en.wikipedia.org/w/api.php";
 
 const NET_SRC = [
-  { id:"bocha", name:"博查 Web Search", kind:"bocha", needKey:true, need:false,
-    desc:"约 50ms 响应，结果带正文摘要 · 需自备博查 API Key（有免费额度）",
-    hint:"博查 API Key，形如 sk-xxxxxxxx" },
-  { id:"zhipu", name:"智谱 Web Search", kind:"zhipu", needKey:true, need:false,
-    desc:"约 200ms 响应 · 需自备智谱 API Key",
-    hint:"智谱 API Key，形如 xxxxxxxx.xxxxxxxx" },
+  { id:"web", name:"全网搜索（免 Key）", kind:"web", need:false, ownOnly:true,
+    desc:"经**本站自己的**云函数实时搜全网（360 主 / 必应备），返回标题+摘要+原文链接 · 免 Key、国内直连、手机也能用",
+    probe:"" },
   { id:"zhwiki", name:"中文维基百科", kind:"zhwiki", need:true,
     desc:"免 Key · 搜索条目并取首段摘要 · 原生跨域（origin=*）",
     probe:"https://zh.wikipedia.org/w/api.php?action=query&format=json&origin=*&meta=siteinfo" },
@@ -3178,33 +3193,30 @@ const NET_SRC = [
   { id:"pmd", name:"PubMed 文献摘要", kind:"pmd", need:false,
     desc:"免 Key ·  NIH 官方接口，可直连 · 查英文医学文献题录与摘要（供学习参考）",
     probe:"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=shock&retmode=json&retmax=1" },
-  { id:"web", name:"全网搜索（免 Key）", kind:"web", need:false,
-    desc:"经本站云函数实时搜全网（360 主 / 必应备），返回标题+摘要+原文链接 · 免 Key、国内直连、手机也能用",
-    probe:"" },
   { id:"gxmu", name:"广西医科大学官网（含内网查看）", kind:"gxmu", need:false,
     desc:"实时抓校网各栏目 · 需在本机运行校园网代理（web/gxmu_proxy.py，二号默认 8894）；连着校园网时连「内网查看」也能读到。代理没开则自动降级为公开栏目",
     probe:"http://127.0.0.1:8894/ping" },
 ];
 
-const escA = s => String(s==null?"":s).replace(/[&<>"']/g,
-  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-
 const NET = {
-  K:"sz2_net", KK:"sz2_netkeys", TIMEOUT:6000, PER_SRC:3, MAX_CHARS:3600,
+  K:"sz2_net", TIMEOUT:6000, PER_SRC:3, MAX_CHARS:3600,
   on:false, hits:0, ok:0, warned:false, cache:{}, lastProbe:{},
   load(){ this.on = localStorage.getItem(this.K) === "1"; },
   save(){ try{ localStorage.setItem(this.K, this.on?"1":"0"); }catch(e){} },
 
-  keys(){ try{ return JSON.parse(localStorage.getItem(this.KK)||"{}") || {}; }catch(e){ return {}; } },
-  key(id){ return String(this.keys()[id]||"").trim(); },
-  setKey(id, v){
-    const k = this.keys(); k[id] = String(v||"").trim();
-    try{ localStorage.setItem(this.KK, JSON.stringify(k)); }catch(e){}
-  },
+  /* 2026-10-14：联网已全部免 Key —— 搜索 Key 相关逻辑（sz2_netkeys / keys / key / setKey）
+     整体移除。历史遗留的本机数据不再读取，留着也无害。 */
 
   KC:"sz2_netch",
   chans(){ try{ return JSON.parse(localStorage.getItem(this.KC)||"{}") || {}; }catch(e){ return {}; } },
   isOn(id){ return this.chans()[id] !== false; },
+  /* 该通道在当前站点可否使用。ownOnly 通道（走云函数的「全网搜索」）必须云函数归自己，
+     否则「别人抄站但没配自己的云函数」会打到站长那台 —— 前端直接判为不可用，0 消耗。 */
+  chOk(s){
+    if(!s) return false;
+    if(s.ownOnly && !(typeof window.cloudIsOwn === "function" && window.cloudIsOwn())) return false;
+    return true;
+  },
   setChan(id, on){
     const c = this.chans(); c[id] = !!on;
     try{ localStorage.setItem(this.KC, JSON.stringify(c)); }catch(e){}
@@ -3245,38 +3257,6 @@ const NET = {
       .sort((a,b)=>(a.index||99)-(b.index||99))
       .filter(p=>p.extract && p.extract.replace(/\s+/g,"").length > 40)
       .map(p=>({t:p.title, x:p.extract.replace(/\s+/g," ").trim().slice(0,500)}));
-  },
-
-  async _bocha(q){
-    const k = this.key("bocha"); if(!k) return [];
-    const r = await this._t("https://api.bochaai.com/v1/web-search", this.TIMEOUT, {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+k},
-      body: JSON.stringify({query:q, count:this.PER_SRC, summary:true, freshness:"noLimit"})
-    });
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
-    const arr = (j && j.data && j.data.webPages && j.data.webPages.value) || [];
-    return arr.slice(0, this.PER_SRC).map(p=>({
-      t: p.name || p.siteName || "（无标题）",
-      x: String(p.summary || p.snippet || "").replace(/\s+/g," ").trim().slice(0,500)
-    })).filter(x=>x.x.length > 20);
-  },
-
-  async _zhipu(q){
-    const k = this.key("zhipu"); if(!k) return [];
-    const r = await this._t("https://open.bigmodel.cn/api/paas/v4/web_search", this.TIMEOUT, {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":"Bearer "+k},
-      body: JSON.stringify({search_engine:"search_std", search_query:q})
-    });
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    const j = await r.json();
-    const arr = (j && j.search_result) || [];
-    return arr.slice(0, this.PER_SRC).map(p=>({
-      t: p.title || p.media || "（无标题）",
-      x: String(p.content || "").replace(/\s+/g," ").trim().slice(0,500)
-    })).filter(x=>x.x.length > 20);
   },
 
   /* PubMed：esearch 取 PMID → efetch 取摘要（医学专用通道） */
@@ -3404,9 +3384,7 @@ const NET = {
     if(this.cache[ck]) return this.cache[ck];
     const kind = (NET_SRC.find(x=>x.id===id)||{}).kind;
     let out = [];
-    if(kind === "bocha")       out = await this._bocha(q);
-    else if(kind === "zhipu")  out = await this._zhipu(q);
-    else if(kind === "zhwiki") out = await this._wiki(WIKI_ZH, q);
+    if(kind === "zhwiki")      out = await this._wiki(WIKI_ZH, q);
     else if(kind === "enwiki") out = await this._wiki(WIKI_EN, q);
     else if(kind === "pmd")    out = await this._pubmed(q);
     else if(kind === "web")    out = await this._websearch(q);
@@ -3416,17 +3394,10 @@ const NET = {
   },
 
   async probeOne(s){
-    if(s.needKey && !this.key(s.id))
-      return {id:s.id, ok:false, ms:0, skip:true, note:"未填写 Key"};
+    if(!this.chOk(s))
+      return {id:s.id, ok:false, ms:0, skip:true, note:"本站没有自己的云函数，此通道不可用"};
     const t0 = performance.now();
     try{
-      if(s.needKey){
-        const items = await this._search(s.id, "高血压");
-        const ms = Math.round(performance.now()-t0);
-        return items.length
-          ? {id:s.id, ok:true, ms, note:"检索正常，返回 "+items.length+" 条"}
-          : {id:s.id, ok:false, ms, note:"有响应但无结果（Key 可能无效或无额度）"};
-      }
       let pUrl = s.probe;
       if(s.id === "web"){
         const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
@@ -3459,13 +3430,13 @@ const NET = {
     this.lastProbe = map;
     renderNetList(map);
     const okN = res.filter(r=>r.ok).length;
-    const domestic = res.filter(r=>r.ok && ["bocha","zhipu","pmd"].includes(r.id)).length;
+    const domestic = res.filter(r=>r.ok && ["web","pmd"].includes(r.id)).length;
     if(box) box.innerHTML = okN
       ? `<b style="color:var(--ok)">${okN}/${res.length} 条通道可用</b>`
         + (domestic ? "，其中含可直连通道 —— 可以开启联网参考了。"
                     : " —— 可以开启联网参考了（走的是需要科学上网的境外通道）。")
       : `<b style="color:#e07a6a">0/${res.length} 条通道可用</b>。<br>
-         <b>可直连通道</b>（PubMed / 博查 / 智谱）：PubMed 免 Key 可直接用，博查与智谱需填自己的搜索 API Key；<br>
+         <b>可直连通道</b>：「全网搜索」免 Key、国内直连，但要求本站配有<b>自己的</b>云函数；PubMed 免 Key 可直接用；<br>
          <b>境外通道</b>（维基百科 / Jina / 必应）需要开启科学上网后回来重测。<br>
          眼下联网参考会自动降级跳过，<b>文库问答完全不受影响</b>。`;
   },
@@ -3473,7 +3444,7 @@ const NET = {
   async gather(q){
     if(!this.on || !q) return {txt:"", list:[], note:""};
     this.hits++;
-    const avail = NET_SRC.filter(s => this.isOn(s.id) && (!s.needKey || this.key(s.id)));
+    const avail = NET_SRC.filter(s => this.isOn(s.id) && this.chOk(s));
     const outs = await Promise.all(avail.map(async s=>{
       try{
         const arr = await this._search(s.id, q);
@@ -3488,7 +3459,7 @@ const NET = {
       if(enabled.length === 0)
         note += "当前所有联网通道都被你用开关关掉了——在「🌐 联网参考」面板里打开需要的通道。";
       else if(avail.length === 0)
-        note += "已启用的通道都还没填搜索 Key（博查/智谱需自备 Key），且未开启科学上网（境外通道需代理）—— 当前只能在文库内作答。";
+        note += "已启用的通道当前都不可用（「全网搜索」要求本站配有自己的云函数；维基/Jina/必应是境外通道、需科学上网）—— 当前只能在文库内作答。";
       else
         note += "可能该话题触发了搜索源的内容合规过滤，或通道暂不可达；已自动跳过，文库回答不受影响。";
       return {txt:"", list:[], note};
@@ -3515,25 +3486,23 @@ function renderNetList(map){
   const box = document.getElementById("netlist"); if(!box) return;
   box.innerHTML = NET_SRC.map(s=>{
     const r = map && map[s.id];
-    const st = !r ? `<span class="st">未检测</span>`
+    /* ownOnly 通道（走云函数的全网搜索）在本站没有自己的云函数时，直接判为不可用 */
+    const ownBlocked = s.ownOnly && !NET.chOk(s);
+    const st = ownBlocked ? `<span class="st bad">需自配云函数</span>`
+      : !r ? `<span class="st">未检测</span>`
       : r.ok ? `<span class="st ok">通 ${r.ms}ms</span>`
-      : r.skip ? `<span class="st">未配置</span>`
+      : r.skip ? `<span class="st">不可用</span>`
                : `<span class="st bad">不通</span>`;
     const tag = s.need
       ? `<span class="tag">需科学上网</span>`
+      : ownBlocked ? `<span class="tag" style="border-color:#7a4a3a;color:#e07a6a">本站无云函数</span>`
       : `<span class="tag" style="border-color:#3a5a4a;color:#7fb069">可直接连</span>`;
-    const keyRow = s.needKey
-      ? `<div style="margin-top:6px"><input type="password" autocomplete="off"
-           placeholder="${escA(s.hint||"API Key")}" value="${escA(NET.key(s.id))}"
-           onchange="netKeyChange('${s.id}', this)"
-           style="width:100%;padding:7px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:12.5px"></div>`
-      : "";
-    const on = NET.isOn(s.id);
+    const on = NET.isOn(s.id) && !ownBlocked;
     const swRow = `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);white-space:nowrap;cursor:pointer">
         <input type="checkbox" ${on?"checked":""} onchange="netChanChange('${s.id}', this.checked)"
           style="width:auto;margin:0;flex-shrink:0">启用</label>`;
     return `<div class="srcrow" style="${on?"":"opacity:.45"}">
-      <div class="nm">${esc(s.name)}${tag}<i>${esc(s.desc)}</i>${keyRow}</div>
+      <div class="nm">${esc(s.name)}${tag}<i>${esc(s.desc)}</i></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${st}${swRow}</div>
     </div>`;
   }).join("");
@@ -3541,15 +3510,6 @@ function renderNetList(map){
 function netChanChange(id, on){
   NET.setChan(id, on);
   renderNetList(NET.lastProbe);
-}
-function netKeyChange(id, el){
-  NET.setKey(id, el.value);
-  NET.cache = {};
-  const s = NET_SRC.find(x=>x.id===id); if(!s) return;
-  NET.probeOne(s).then(r=>{
-    const m = Object.assign({}, NET.lastProbe); m[id] = r;
-    NET.lastProbe = m; renderNetList(m);
-  });
 }
 function renderNetStat(){
   const el = document.getElementById("netstat"); if(!el) return;
@@ -4312,7 +4272,7 @@ function renderHome(){
     '</div>' +
     '<div class="homet">学业导航（直接问，或先读这些篇目）</div>' +
     '<div class="chips">'+chips+'</div>' +
-    '<p class="hometip">顶部「📚 文库」进入阅读；左侧栏按分类浏览；底部对话框随时向教材原文请教、拿主意。问答与联网需在「设置」里填自己的 API Key。</p>';
+    '<p class="hometip">顶部「📚 文库」进入阅读；左侧栏按分类浏览；底部对话框随时向教材原文请教、拿主意。问答需在「设置」里填自己的 API Key（<b>联网已免 Key</b>）。</p>';
   rt.appendChild(wrap);
 }
 
@@ -5019,8 +4979,9 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
           foot.textContent = "";
         });
     };
-    var cb = (typeof window.cloudBase === 'function') ? window.cloudBase() : '';
-    /* 没点刷新、或云函数不可用 → 直接静态快照，不惊动云函数（省调用量） */
+    var own = (typeof window.cloudIsOwn === 'function') ? window.cloudIsOwn() : true;
+    var cb = own ? ((typeof window.cloudBase === 'function') ? window.cloudBase() : '') : '';
+    /* 没点刷新、没自己的云函数、或云函数不可用 → 直接静态快照（省调用量 / 不借他人函数） */
     if(!force || !cb){ useFallback(); return; }
     fetch(cb + "/campus?limit=200&refresh=1&t=" + Date.now(), {cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -5044,7 +5005,9 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var items = (d && d.items) || [];
     _todoList = [];                                   /* 重建「引用」索引 */
     if(cn) cn.textContent = items.length ? " " + items.length : "";
-    var srcTxt = live ? "🔴 实时抓取自学校官网" : "站点快照（云函数不通时的兜底）";
+    var _own = (typeof window.cloudIsOwn === 'function') ? window.cloudIsOwn() : true;
+    var srcTxt = live ? "🔴 实时抓取自学校官网"
+      : (_own ? "站点快照（云函数不通时的兜底）" : "站点快照（本站未配置自己的云函数）");
     if(!items.length){
       body.innerHTML = '<div class="empty">今天没有待办。</div>';
       foot.textContent = srcTxt + (d && d.updated_at ? " ｜ 更新于 " + d.updated_at : "");
@@ -5164,6 +5127,6 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
 <!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
-<script src="agent.js?v=2026.10.14-agent8"></script>
+<script src="agent.js?v=2026.10.14-agent9"></script>
 </body>
 </html>
