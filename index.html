@@ -397,10 +397,11 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
 
     <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">联网信息来源</div>
     <div class="hint" style="margin:0 0 6px;line-height:1.8">
-      <b style="color:#7fb069">国内直连</b>：博查 / 智谱，需自备搜索 API Key，毫秒级响应，<b>无需科学上网</b>（Key 只存本机浏览器）；<br>
-      <b style="color:#d99a7a">需科学上网</b>：维基百科 / Jina / 必应，免 Key，但境内直连不可达。
+      <b style="color:#7fb069">一条 Key 都不用填</b> —— 免 Key 通道即可用（PubMed 国内可直连；维基百科 / Jina / 必应需科学上网后才通）。<br>
+      校园公告走「待办」的<b>实时抓取</b>（不经搜索引擎），要看最新通知就去那边。<br>
+      <span style="opacity:.8">博查 / 智谱是<b>可选加强</b>：想让中文搜索更准再填自己的 Key（只存本机浏览器，<b>不填也完全能用</b>）。</span>
     </div>
-    <div class="hint" style="margin:0 0 8px;line-height:1.8">每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索（例如你只想用博查、不想让其它源掺进来）。</div>
+    <div class="hint" style="margin:0 0 8px;line-height:1.8">每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索。免 Key 通道里显示「通」的就能用。</div>
     <div id="netlist"></div>
 
     <button class="btn" onclick="NET.probeAll()">检测各通道连通性</button>
@@ -4879,17 +4880,31 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
   window.loadTodoDrawer = function(force){
     var body = document.getElementById("todobody");
     var foot = document.getElementById("todofoot");
-    if(cache && !force){ renderTodo(cache); return; }
+    if(cache && !force){ renderTodo(cache, cache.__live); return; }
     body.innerHTML = '<div class="empty">载入中…</div>';
-    fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+    /* 2026-10-14 改：优先**实时抓取** —— 调云函数 /campus，服务端当场去校网抓，
+       拿回来就是最新公告。静态 data/todo.json 只作兜底。
+       原来只读静态快照 → 快照不会自己更新 → 那个「刷新」按钮点了等于没点。 */
+    var useFallback = function(e1){
+      fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+        .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+        .then(function(d){ cache = d; cache.__live = false; renderTodo(d, false); })
+        .catch(function(e){
+          body.innerHTML = '<div class="empty">读不到待办数据。<br><br>' +
+            '<span style="font-size:12px">实时接口与静态快照都没取到。<br>' +
+            '(' + ((e && e.message) || e || e1 || '未知') + ')</span></div>';
+          foot.textContent = "";
+        });
+    };
+    var cb = (typeof window.cloudBase === 'function') ? window.cloudBase() : '';
+    if(!cb){ useFallback(); return; }
+    fetch(cb + "/campus?limit=200&refresh=" + (force ? 1 : 0) + "&t=" + Date.now(), {cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function(d){ cache = d; renderTodo(d); })
-      .catch(function(e){
-        body.innerHTML = '<div class="empty">读不到待办数据。<br><br>' +
-          '<span style="font-size:12px">本机 bridge 每次同步会生成 data/todo.json。<br>' +
-          '确认已跑过 <code>python bridge.py sync</code>。<br>(' + (e.message||e) + ')</span></div>';
-        foot.textContent = "";
-      });
+      .then(function(d){
+        if(d && d.ok && d.items && d.items.length){ cache = d; cache.__live = true; renderTodo(d, true); }
+        else useFallback();
+      })
+      .catch(function(e){ useFallback(e); });
   };
 
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g, function(c){
@@ -4897,15 +4912,16 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
   function fmt(ts){ if(!ts) return ""; try{
     return new Date(ts*1000).toLocaleDateString("zh-CN"); }catch(e){ return ""; } }
 
-  function renderTodo(d){
+  function renderTodo(d, live){
     var body = document.getElementById("todobody");
     var foot = document.getElementById("todofoot");
     var cn = document.getElementById("todocnt");
     var items = (d && d.items) || [];
     if(cn) cn.textContent = items.length ? " " + items.length : "";
+    var srcTxt = live ? "🔴 实时抓取自学校官网" : "站点快照（云函数不通时的兜底）";
     if(!items.length){
       body.innerHTML = '<div class="empty">今天没有待办。</div>';
-      foot.textContent = (d && d.updated_at) ? "更新于 " + d.updated_at : "";
+      foot.textContent = srcTxt + (d && d.updated_at ? " ｜ 更新于 " + d.updated_at : "");
       return;
     }
     var LV = ["P0","P1","P2","P3"], NM = {P0:"紧急",P1:"重要",P2:"一般",P3:"低"};
@@ -4993,19 +5009,26 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
       });
     });
     body.innerHTML = html;
-    foot.textContent = "共 " + n + " 条" +
-      (d.updated_at ? " ｜ 更新于 " + d.updated_at : "") +
-      (d.note ? " ｜ " + d.note : "");
+    foot.textContent = srcTxt + " ｜ 共 " + n + " 条" +
+      (d.updated_at ? " ｜ 更新于 " + d.updated_at : "");
   }
 
-  // 启动后顺手取一次数量
+  // 启动后顺手取一次数量（优先实时接口 /campus，回落静态快照）
   setTimeout(function(){
-    fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+    var setCnt = function(d){
+      cache = d; if(d) d.__live = !!d.__live;
+      var cn = document.getElementById("todocnt");
+      if(cn && d && d.items) cn.textContent = " " + d.items.length;
+    };
+    var cb = (typeof window.cloudBase === 'function') ? window.cloudBase() : '';
+    var u = cb ? (cb + "/campus?limit=200&t=" + Date.now()) : "data/todo.json?t=" + Date.now();
+    fetch(u, {cache:"no-store"})
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
-        cache = d;
-        var cn = document.getElementById("todocnt");
-        if(cn && d && d.items) cn.textContent = " " + d.items.length;
+        if(d && d.ok && d.items && d.items.length){ d.__live = true; setCnt(d); return; }
+        return fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(s){ if(s) s.__live = false; setCnt(s); });
       }).catch(function(){});
   }, 1200);
 })();
@@ -5016,6 +5039,6 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
 <!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
-<script src="agent.js?v=2026.10.07-agent5"></script>
+<script src="agent.js?v=2026.10.14-agent6"></script>
 </body>
 </html>
