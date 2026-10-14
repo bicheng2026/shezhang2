@@ -4337,6 +4337,9 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     "#tododrawer .ttabs{display:flex;gap:6px;padding:8px 12px 0;border-bottom:1px solid rgba(0,0,0,.08)}",
     "#tododrawer .ttabs button{border:0;background:transparent;padding:7px 12px;font:inherit;font-size:13px;color:#667085;cursor:pointer;border-bottom:2px solid transparent}",
     "#tododrawer .ttabs button.on{color:#1f2328;font-weight:600;border-bottom-color:#3b82f6}",
+    "#tododrawer .it{cursor:pointer;transition:background .15s,border-color .15s}",
+    "#tododrawer .it:hover{background:#f5f8ff;border-color:#c7d7f5}",
+    "#tododrawer .it .itq{color:#3b82f6}",
   ].join("");
   var st = document.createElement("style"); st.textContent = CSS; document.head.appendChild(st);
 
@@ -4381,6 +4384,44 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
   window.closeTodoDrawer = function(){
     dr.classList.remove("open"); mask.classList.remove("open");
   };
+
+  /* ===== 待办 → 一键引用进对话框（2026-10-14 主公要求）=====
+     点某条待办：关抽屉 → 把这条（标题 / 来源 / 日期 / 原文链接）作为「引用块」
+     填进输入框并聚焦，你接着补问题按回车就能发。
+     点标题里的 ↗ 链接仍是直达官网原文（不触发引用）。 */
+  var _todoList = [];
+  function _quoteTodo(x){
+    if(!x) return;
+    window.closeTodoDrawer();
+    var L = ["【引用待办】" + String(x.title || "")];
+    var meta = [];
+    if(x.src) meta.push("来自 " + x.src);
+    if(x.pubdate) meta.push("发布于 " + x.pubdate);
+    if(x.ddl) meta.push("截止 " + x.ddl);
+    if(meta.length) L.push(meta.join(" ｜ "));
+    if(x.url) L.push("原文：" + x.url);
+    var txt = L.join("\n") + "\n\n";
+    var q = document.getElementById("q");
+    if(q){
+      q.value = txt + (q.value || "");
+      q.style.height = "auto";
+      q.style.height = Math.min(Math.max(q.scrollHeight, 40), 220) + "px";
+      q.focus();
+      try{ q.setSelectionRange(q.value.length, q.value.length); }catch(err){}
+    }
+  }
+  var _tb = document.getElementById("todobody");
+  if(_tb){
+    _tb.addEventListener("click", function(e){
+      var t = e.target;
+      if(t && t.closest && t.closest("a")) return;      /* 标题链接：照旧跳原文 */
+      var it = (t && t.closest) ? t.closest(".it") : null;
+      if(!it) return;
+      var qi = it.getAttribute("data-qi");
+      if(qi == null) return;
+      _quoteTodo(_todoList[+qi]);
+    });
+  }
 
   /* ============ 班群摘要（2026-10-03 立，2026-10-07 改道）============
      🔴 为什么不再 fetch data/qq_digest.json：
@@ -4917,6 +4958,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var foot = document.getElementById("todofoot");
     var cn = document.getElementById("todocnt");
     var items = (d && d.items) || [];
+    _todoList = [];                                   /* 重建「引用」索引 */
     if(cn) cn.textContent = items.length ? " " + items.length : "";
     var srcTxt = live ? "🔴 实时抓取自学校官网" : "站点快照（云函数不通时的兜底）";
     if(!items.length){
@@ -4962,13 +5004,14 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
       html += '<div class="grp" style="color:#c9a227">⭐ 置顶 · 比赛/竞赛类（' + pinN + '）</div>';
       items.filter(function(x){ return x.pin; }).forEach(function(x){
         n++;
+        var qi = _todoList.push(x) - 1;               /* 引用索引 */
         var u = (typeof x.url === "string" && /^https?:\/\//i.test(x.url)) ? x.url : "";
         var titleHtml = u
           ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer" ' +
             'style="color:inherit;text-decoration:none;border-bottom:1px dashed currentColor">' +
             esc(x.title) + ' <span style="opacity:.55;font-size:11px">↗</span></a>'
           : esc(x.title);
-        html += '<div class="it ' + (x.level || "P2") + '">' +
+        html += '<div class="it ' + (x.level || "P2") + '" data-qi="' + qi + '">' +
           '<div style="margin-bottom:3px">' + tagHtml(x) + '</div>' +
           '<div class="t">' + titleHtml + '</div>' +
           '<div class="m">' +
@@ -4977,6 +5020,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
                老数据没有这个字段，才回落显示抓取时间，并注明是抓取时间。 */
             (x.pubdate ? "<span>发布于 " + esc(x.pubdate) + "</span>"
                        : (x.ts ? "<span>抓取于 " + fmt(x.ts) + "</span>" : "")) +
+            '<span class="itq">💬 引用到对话</span>' +
           "</div></div>";
       });
     }
@@ -4987,6 +5031,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
       html += '<div class="grp">' + lv + " · " + NM[lv] + "（" + g.length + "）</div>";
       g.forEach(function(x){
         n++;
+        var qi = _todoList.push(x) - 1;               /* 引用索引 */
         /* 2026-10-03：标题做成可点击直达官网原文。
            ⚠️ 只信任 http(s) 开头的地址，挡掉 javascript: 之类的注入；
               rel="noopener noreferrer" 防止新页面拿到本页句柄。 */
@@ -4997,7 +5042,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
             esc(x.title) + ' <span style="opacity:.55;font-size:11px">↗</span></a>'
           : esc(x.title);
         /* 标签行放在标题上方（截止日已在标签里，不再在下面重复一遍） */
-        html += '<div class="it ' + lv + '">' +
+        html += '<div class="it ' + lv + '" data-qi="' + qi + '">' +
           '<div style="margin-bottom:3px">' + tagHtml(x) + '</div>' +
           '<div class="t">' + titleHtml + "</div>" +
           '<div class="m">' +
@@ -5005,6 +5050,7 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
             (x.pubdate ? "<span>发布于 " + esc(x.pubdate) + "</span>"
                        : (x.ts ? "<span>抓取于 " + fmt(x.ts) + "</span>" : "")) +
             (u ? '<span style="opacity:.6">可点标题直达原文</span>' : "") +
+            '<span class="itq">💬 引用到对话</span>' +
           "</div></div>";
       });
     });
