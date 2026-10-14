@@ -404,6 +404,15 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     <div class="hint" style="margin:0 0 8px;line-height:1.8">每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索。免 Key 通道里显示「通」的就能用。</div>
     <div id="netlist"></div>
 
+    <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">校园网内网（可选）</div>
+    <div class="hint" style="margin:0 0 6px;line-height:1.8">
+      校网的「内网查看」栏目只有校内网络才打得开；而且浏览器规定：公网站点（https）<b>读不了你电脑上的本机服务</b>，
+      必须<b>用本机地址打开本站</b>才行。<br>
+      想连内网栏目一起读：双击项目里的 <b>启动校园网代理.bat</b>，它会自动用本机地址打开本站（同源即可读）。<br>
+      当前：<b id="gxmumode">检测中…</b>
+    </div>
+    <button class="btn" onclick="openInnerMode()">打开内网模式（本机地址）</button>
+
     <button class="btn" onclick="NET.probeAll()">检测各通道连通性</button>
     <div id="netprobe" class="hint" style="margin-top:10px;line-height:1.8"></div>
 
@@ -3529,10 +3538,27 @@ function applyNet(){
 }
 function toggleNet(){ NET.setSw(!NET.on); }
 function openNet(){
-  renderNetList(NET.lastProbe); renderNetStat(); applyNet();
+  renderNetList(NET.lastProbe); renderNetStat(); renderGxmuMode(); applyNet();
   document.getElementById("netmask").style.display = "flex";
 }
 function closeNet(){ document.getElementById("netmask").style.display = "none"; }
+/* 2026-10-14：校园网内网模式 —— 状态显示 + 一键切到本机同源地址 */
+function renderGxmuMode(){
+  var el = document.getElementById("gxmumode"); if(!el) return;
+  var local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+  var p = (typeof NET !== "undefined" && NET.gxmuPort) ? String(NET.gxmuPort()) : "8894";
+  if(local && String(location.port) === p){
+    el.textContent = "✓ 已启用（本机同源，内网栏目可读）"; el.style.color = "var(--ok)";
+  }else if(local){
+    el.textContent = "本机打开，但不是代理端口 " + p; el.style.color = "#e0a76a";
+  }else{
+    el.textContent = "未启用（当前是公网站点，读不到本机代理）"; el.style.color = "var(--dim)";
+  }
+}
+function openInnerMode(){
+  var p = (typeof NET !== "undefined" && NET.gxmuPort) ? String(NET.gxmuPort()) : "8894";
+  location.href = "http://127.0.0.1:" + p + "/";
+}
 
 /* ============ 设置 ============ */
 function openSet(){
@@ -4918,6 +4944,36 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
   };
 
   var cache = null;
+  /* 2026-10-14（主公按 A 方案）：本机校网代理在线时（用 http://127.0.0.1:8894 打开本站 = 同源），
+     把「内网查看」栏目也并进待办列表。公网站点读不到 127.0.0.1（浏览器拦），静默跳过。 */
+  function _innerBase(){
+    try{
+      if(typeof NET === "undefined" || !NET || !NET.gxmuPort) return "";
+      var p = NET.gxmuPort();
+      var local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+      return (local && String(location.port) === String(p)) ? "" : "http://127.0.0.1:" + p;
+    }catch(e){ return ""; }
+  }
+  function withInner(d, done){
+    if(!d || !d.items){ done(); return; }
+    fetch(_innerBase() + "/list?section=nwtz&n=20&t=" + Date.now(), {cache:"no-store"})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        if(j && j.items && j.items.length){
+          var have = {}; d.items.forEach(function(x){ if(x && x.url) have[x.url] = 1; });
+          j.items.forEach(function(a, i){
+            if(!a || !a.url || have[a.url]) return;
+            have[a.url] = 1;
+            d.items.push({ id:"nwtz-" + (a.url.split("/").pop() || i), level:"P2",
+              title:a.title, ddl:"", src:"内网查看（校园内网）",
+              reason:"🔒 校园网内网栏目；发布时间 " + (a.date || "未知"),
+              url:a.url, pubdate:a.date || "", pin:0, ts:Math.floor(Date.now()/1000) });
+          });
+        }
+        done();
+      })
+      .catch(function(){ done(); });
+  }
   window.loadTodoDrawer = function(force){
     var body = document.getElementById("todobody");
     var foot = document.getElementById("todofoot");
@@ -4929,7 +4985,8 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var useFallback = function(e1){
       fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
         .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-        .then(function(d){ cache = d; cache.__live = false; renderTodo(d, false); })
+        .then(function(d){ cache = d; cache.__live = false;
+          withInner(d, function(){ renderTodo(d, false); }); })
         .catch(function(e){
           body.innerHTML = '<div class="empty">读不到待办数据。<br><br>' +
             '<span style="font-size:12px">实时接口与静态快照都没取到。<br>' +
@@ -4942,7 +4999,8 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     fetch(cb + "/campus?limit=200&refresh=" + (force ? 1 : 0) + "&t=" + Date.now(), {cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function(d){
-        if(d && d.ok && d.items && d.items.length){ cache = d; cache.__live = true; renderTodo(d, true); }
+        if(d && d.ok && d.items && d.items.length){ cache = d; cache.__live = true;
+          withInner(d, function(){ renderTodo(d, true); }); }
         else useFallback();
       })
       .catch(function(e){ useFallback(e); });
@@ -4977,7 +5035,8 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     function todoTags(x){
       var r = String(x.reason || "");
       var T = [];
-      if (/🏆|比赛|竞赛|大赛|挑战杯|创新创业|互联网\+/.test(r)) T.push(["🏆 比赛/竞赛", "#c9a227"]);
+      if (/内网/.test(r)) T.push(["🔒 校园内网", "#9b8cff"]);
+      else if (/🏆|比赛|竞赛|大赛|挑战杯|创新创业|互联网\+/.test(r)) T.push(["🏆 比赛/竞赛", "#c9a227"]);
       else if (/讲座|培训|会议|学术/.test(r)) T.push(["🎓 讲座培训", "#6ea8d8"]);
       else if (/考试|测验|补考|重修|成绩/.test(r)) T.push(["📝 考试教务", "#c0392b"]);
       else if (/选课|教学|教务|学分/.test(r)) T.push(["🎓 教务选课", "#5ad1c0"]);
