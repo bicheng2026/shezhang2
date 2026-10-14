@@ -1,5 +1,5 @@
 /* ==================================================================
-   蛇杖二号 · Agent 内核  v2-agent8
+   蛇杖二号 · Agent 内核  v2-agent9
    ------------------------------------------------------------------
    干什么：把「检索权」从 ask() 的硬编码直线里拿回来，交给模型。
            模型自己决定查什么、查几轮；查不到允许它说「没找到」。
@@ -365,7 +365,7 @@ const HANDLERS = {
         new Promise(res=>setTimeout(()=>res({txt:"", list:[], note:"联网超时"}), 12000))
       ]);
       if(!r || !r.list || !r.list.length)
-        return {ok:false, msg:"联网未取到内容。" + ((r && r.note) || "可能通道不可达或未配置搜索 Key。")};
+        return {ok:false, msg:"联网未取到内容。" + ((r && r.note) || "可能通道不可达。")};
       return {ok:true, count:r.list.length,
               items:r.list.map((x,n)=>({n:n+1, src:x.src, title:x.t})),
               text:clip(r.txt, 3600),
@@ -381,7 +381,9 @@ const HANDLERS = {
          站点端不会自己更新 → 「刷新」永远看不出变化。改成实时优先。 */
       let j = null, live = false;
       try{
-        const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
+        /* 🔒 只有云函数属于本站自己时才发起请求（防止别人抄站白嫖站长额度） */
+        const own = (typeof window.cloudIsOwn === "function") ? window.cloudIsOwn() : true;
+        const cb = own ? ((typeof window.cloudBase === "function") ? window.cloudBase() : "") : "";
         if(cb){
           const r = await Promise.race([
             fetch(cb + "/campus?limit=200&t=" + Date.now(), {cache:"no-store"}),
@@ -1003,7 +1005,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent8",        // 精简：撤天气专源；联网超时 6s→12s；gxmu 通道公网快退
+  v:"v2-agent9",        // 联网全部免 Key（撤博查/智谱）；云函数仅归自己时可用
   runLoop,
   selfTest,
   CFG,
