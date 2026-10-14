@@ -1,5 +1,5 @@
 /* ==================================================================
-   蛇杖二号 · Agent 内核  v2-agent5
+   蛇杖二号 · Agent 内核  v2-agent8
    ------------------------------------------------------------------
    干什么：把「检索权」从 ask() 的硬编码直线里拿回来，交给模型。
            模型自己决定查什么、查几轮；查不到允许它说「没找到」。
@@ -90,21 +90,10 @@ const TOOL_SCHEMA = [
     type:"function",
     function:{
       name:"net_search",
-      description:"联网检索公开网络资料（通用网页搜索），用于时效性信息（最新新闻、事件、政策、指南共识、考试范围公告等）。要查天气请改用 get_weather。只传问题本身，绝不要把教材原文拼进来。返回结果须标〔网n〕。需要用户已在页面开启联网。",
+      description:"联网检索公开网络资料（通用网页搜索），用于时效性信息（最新新闻、事件、政策、指南共识、考试范围公告、天气等）。只传问题本身，绝不要把教材原文拼进来。返回结果须标〔网n〕。需要用户已在页面开启联网。",
       parameters:{ type:"object", properties:{
         q:{type:"string", description:"检索问句，只写问题本身"}
       }, required:["q"]}
-    }
-  },
-  {
-    type:"function",
-    function:{
-      name:"get_weather",
-      description:"查询实时天气与未来几天预报（现时温度、体感、湿度、风、降水概率、最高最低温）。凡问「今天天气」「明天会下雨吗」「气温多少」「要带伞吗」「XX 天气怎么样」都用它。用户若没说城市，**不要反问**——直接省略 city，系统会用默认城市。",
-      parameters:{ type:"object", properties:{
-        city:{type:"string", description:"城市名，如「南宁」「北京」。用户没说就留空。"},
-        days:{type:"integer", description:"预报天数，1–7，默认 3"}
-      }}
     }
   },
   {
@@ -152,17 +141,14 @@ const TOOLS_PROMPT = [
 "  4）问到通知、待办、截止日期、报名/申报/评选/讲座/考试时间这类事务性内容 —— 第一优先调 get_todo，",
 "     它给的是**实时抓取**的学校官网清单，带截止日和原文链接；get_todo 没命中再考虑 net_search。",
 "     典型触发：「最近有什么通知」「有什么待办」「XX 什么时候截止」「XX 报名到几号」「申报开始了没」。",
-"  5）问到**天气、气温、下不下雨、要不要带伞、穿什么** —— 调 get_weather（实时数据，比搜索准）；",
-"     用户没说城市就直接查默认城市，**不要反问「你在哪个城市」**，也不要用 net_search 去搜天气。",
-"  6）用户提到了自己上传的附件 —— 用 read_attach。",
-"  7）第一轮检索结果不够、或明显跑偏 —— 换关键词再查一轮，别急着答。",
+"  5）用户提到了自己上传的附件 —— 用 read_attach。",
+"  6）第一轮检索结果不够、或明显跑偏 —— 换关键词再查一轮，别急着答。",
 "",
 "怎么引用：",
 "  · read_chapter 返回的原文编号〔n〕，net_search 返回的编号〔网n〕，get_todo 返回的编号〔待办n〕。",
 "  · 你引用的每一处，都必须真的来自工具返回的内容。工具没返回的，不许编。",
 "  · read_chapter 的参数 i 只能用工具返回给你的序号，不要自己编造。",
 "  · 说到某条待办时，必须带上它的截止日期（ddl 字段），有原文链接就把链接给用户。",
-"  · get_weather 返回的是**实时数据**，直接据实说就行（带上温度、天气、降水），不要标〔网n〕。",
 "",
 "🔴 搜不到时怎么换词（这条最重要，检索能力全靠它）：",
 "  · 索引只匹配**书名 / 章节标题**，不搜正文。而教材章节标题几乎不会写「XX代谢」这种总称，",
@@ -376,7 +362,7 @@ const HANDLERS = {
       /* 隐私：只传问句，绝不传任何【原文】正文 */
       const r = await Promise.race([
         NET.gather(q),
-        new Promise(res=>setTimeout(()=>res({txt:"", list:[], note:"联网超时"}), 6000))
+        new Promise(res=>setTimeout(()=>res({txt:"", list:[], note:"联网超时"}), 12000))
       ]);
       if(!r || !r.list || !r.list.length)
         return {ok:false, msg:"联网未取到内容。" + ((r && r.note) || "可能通道不可达或未配置搜索 Key。")};
@@ -385,40 +371,6 @@ const HANDLERS = {
               text:clip(r.txt, 3600),
               tip:"引用时标〔网n〕，序号与上面 items 的 n 对应"};
     }catch(e){ return {ok:false, msg:"联网失败：" + e.message}; }
-  },
-
-  /* 天气：专源（云函数 /weather → Open-Meteo），不走也走不到的通用搜索。
-     默认城市：用户没指定就用本机存的 sz2_city，没有则「南宁」。 */
-  async get_weather(a){
-    const city = String(a && a.city || "").trim();
-    const days = Math.min(Math.max(parseInt(a && a.days, 10) || 3, 1), 7);
-    try{
-      const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
-      if(!cb) return {ok:false, msg:"未配置云函数地址，取不到天气。"};
-      let defCity = "南宁";
-      try{ defCity = localStorage.getItem("sz2_city") || "南宁"; }catch(e){}
-      const u = cb + "/weather?days=" + days + "&city=" + encodeURIComponent(city || defCity);
-      const r = await Promise.race([
-        fetch(u, {cache:"no-store"}),
-        new Promise(res => setTimeout(() => res(null), 12000))
-      ]);
-      if(!r) return {ok:false, msg:"天气接口超时"};
-      if(!r.ok) return {ok:false, msg:"天气接口 HTTP " + r.status};
-      const j = await r.json();
-      if(!j || !j.ok) return {ok:false, msg:(j && j.msg) || "天气数据没取到"};
-      const c = j.current || {};
-      const L = [];
-      L.push("【" + (j.place || j.city) + "】实时：" + c.temp + "°C（体感 " + c.feels + "°C）ꞏ" + c.desc +
-             "，湿度 " + c.humidity + "%，风速 " + c.wind + " km/h" +
-             (c.rain ? "，降水量 " + c.rain + " mm" : ""));
-      (j.daily || []).forEach(d => {
-        L.push(d.date + "：" + d.desc + "，" + d.tmin + "~" + d.tmax + "°C" +
-               (d.rain != null ? "，降水概率 " + d.rain + "%" : ""));
-      });
-      L.push("（数据源 Open-Meteo，更新于 " + (j.updated_at || "") + "）");
-      return {ok:true, city:j.city, place:j.place, data:j, text:L.join("\n"),
-              tip:"这是实时天气数据，直接据实回答；它不是搜索来源，不要标〔网n〕。"};
-    }catch(e){ return {ok:false, msg:"天气读取失败：" + e.message}; }
   },
 
   async get_todo(a){
@@ -1051,7 +1003,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent7",        // ＋get_weather 天气工具（云函数 /weather → Open-Meteo，专源）
+  v:"v2-agent8",        // 精简：撤天气专源；联网超时 6s→12s；gxmu 通道公网快退
   runLoop,
   selfTest,
   CFG,
