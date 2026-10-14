@@ -3334,6 +3334,9 @@ const NET = {
   /* 全网搜索：走本站云函数 /search（服务端抓 360/必应，免 Key）。
      —— 公网、手机、任何网络都能用，不需要本机代理。 */
   async _websearch(q){
+    /* 🔒 双保险：云函数不归本站自己 → 直接拒绝，绝不发起请求（保护站长额度） */
+    if(!(typeof window.cloudIsOwn === "function" && window.cloudIsOwn()))
+      throw new Error("本站未配置自己的云函数，全网搜索不可用");
     const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
     if(!cb) throw new Error("未配置云函数地址");
     const r = await this._t(cb + "/search?q=" + encodeURIComponent(q) + "&n=" + this.PER_SRC, 8000);
