@@ -100,7 +100,7 @@ const TOOL_SCHEMA = [
     type:"function",
     function:{
       name:"get_todo",
-      description:"读取待办与公告清单（学校官网、图书馆官网的正式通知，共百余条，每条含标题、截止日期、来源、原文链接；不含任何班群消息）。凡是问「有什么通知」「最近有什么待办」「什么时候截止」「XX 报名到几号」「申报/评选/讲座/考试/奖学金/实习怎么安排」这类事务性、带时间点的问题，第一优先调用它。不传 kw 就返回全部（有截止日的排在最前）。",
+      description:"读取学校官网的公告与待办清单（**实时抓取**最新通知，每条含标题、截止日期、来源、原文链接；不含任何班群消息）。凡是问「有什么通知」「最近有什么待办」「什么时候截止」「XX 报名到几号」「申报/评选/讲座/考试/奖学金/实习怎么安排」这类事务性、带时间点的问题，第一优先调用它。不传 kw 就返回全部（有截止日的排在最前）。",
       parameters:{ type:"object", properties:{
         kw:{type:"string", description:"可选。关键词过滤，如「奖学金」「四六级」「申报」「图书馆」。留空则返回全部。"},
         topk:{type:"integer", description:"返回条数，默认 20，上限 30"}
@@ -139,7 +139,7 @@ const TOOLS_PROMPT = [
 "  2）问题里出现了具体书名（如「中医学第10版」「系统解剖学」）—— 用 locate_doc 定位到具体章节。",
 "  3）只知道书名、不知道在第几章 —— 用 read_doc_head 看册的开头（目录/绪论），再决定读哪章。",
 "  4）问到通知、待办、截止日期、报名/申报/评选/讲座/考试时间这类事务性内容 —— 第一优先调 get_todo，",
-"     它给的是学校官网清单，带截止日和原文链接；get_todo 没命中再考虑 net_search。",
+"     它给的是**实时抓取**的学校官网清单，带截止日和原文链接；get_todo 没命中再考虑 net_search。",
 "     典型触发：「最近有什么通知」「有什么待办」「XX 什么时候截止」「XX 报名到几号」「申报开始了没」。",
 "  5）用户提到了自己上传的附件 —— 用 read_attach。",
 "  6）第一轮检索结果不够、或明显跑偏 —— 换关键词再查一轮，别急着答。",
@@ -375,10 +375,30 @@ const HANDLERS = {
 
   async get_todo(a){
     try{
-      const r = await fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"});
-      if(!r.ok) return {ok:false, msg:"待办读取失败 HTTP " + r.status +
-        "（确认 data/todo.json 已随站点放上去）"};
-      const j = await r.json();
+      /* ① 先要**实时**的：调云函数 /campus，当场服务端抓校网（真·最新）。
+         ② 云函数不通 / 超时 / 没配 → 回落站点静态快照 data/todo.json。
+         2026-10-14 改：原来只读静态 json，而那份快照是「本机手动抓 + 一号镜像」，
+         站点端不会自己更新 → 「刷新」永远看不出变化。改成实时优先。 */
+      let j = null, live = false;
+      try{
+        const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
+        if(cb){
+          const r = await Promise.race([
+            fetch(cb + "/campus?limit=200&t=" + Date.now(), {cache:"no-store"}),
+            new Promise(res => setTimeout(() => res(null), 9000))
+          ]);
+          if(r && r.ok){
+            const jj = await r.json();
+            if(jj && jj.ok && jj.items && jj.items.length){ j = jj; live = true; }
+          }
+        }
+      }catch(e){ /* 云函数不可用 → 走静态快照 */ }
+      if(!j){
+        const r = await fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"});
+        if(!r.ok) return {ok:false, msg:"待办读取失败 HTTP " + r.status +
+          "（云函数与静态快照都没取到）"};
+        j = await r.json();
+      }
       /* 隐私双保险：这份 json 若哪天 include_qq 变 true，直接拒绝返回 */
       if(j && j.include_qq)
         return {ok:false, msg:"该数据源含班群内容，按隐私红线不予读取。"};
@@ -419,8 +439,10 @@ const HANDLERS = {
                 msg: kw ? ("没有命中「" + kw + "」的待办。可以不带 kw 再取一次看全部，或换个更短的词。")
                         : "待办清单为空。"};
       return {ok:true, count:out.length, matched:total, items:out,
+              source: live ? "gxmu-live" : "snapshot",
               updated:(j && j.updated_at) || "",
-              tip:"这是学校/图书馆官网的公开公告与待办清单，共命中 " + total +
+              tip:(live ? "🔴 数据是刚从学校官网**实时抓取**的" : "数据来自站点静态快照") +
+                  "（学校官网公开公告与待办清单），共命中 " + total +
                   " 条，上面返回前 " + out.length + " 条（有截止日的排最前）。引用时标〔待办n〕；" +
                   "需要给用户原文出处就用 url 字段。含班群消息的数据源不在此列，也拿不到。"};
     }catch(e){ return {ok:false, msg:"待办读取失败：" + e.message}; }
@@ -981,7 +1003,7 @@ async function selfTest(){
 
 /* ---------- 11. 导出 ---------- */
 window.AGENT = {
-  v:"v2-agent5",        // ① 轨迹前置显示 ② token 记账 ③ get_todo 加强
+  v:"v2-agent6",        // get_todo 改走云函数 /campus 实时抓校网（静态快照兜底）
   runLoop,
   selfTest,
   CFG,
