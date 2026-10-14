@@ -3356,7 +3356,7 @@ const NET = {
   async _websearch(q){
     const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
     if(!cb) throw new Error("未配置云函数地址");
-    const r = await this._t(cb + "/search?q=" + encodeURIComponent(q) + "&n=" + this.PER_SRC, 13000);
+    const r = await this._t(cb + "/search?q=" + encodeURIComponent(q) + "&n=" + this.PER_SRC, 8000);
     if(!r.ok) throw new Error("HTTP " + r.status);
     const j = await r.json();
     const arr = (j && j.items) || [];
@@ -3367,27 +3367,29 @@ const NET = {
   },
 
   async _gxmu(q){
-    const p = await this.detectPort();
     const local = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
-    const P = (local && String(location.port) === p) ? "" : "http://127.0.0.1:" + p;
-    let via = "本机代理";
-    try{
-      const r = await this._t(P + "/search?q=" + encodeURIComponent(q) + "&n=4", 12000);
-      if(r.ok){
-        const j = await r.json();
-        if(j && j.hits && j.hits.length){
-          return j.hits.map(h => ({
-            t: (h.sectionName ? "[" + h.sectionName + "] " : "") + (h.title || "（无标题）"),
-            x: ((h.date ? h.date + "　" : "") + String(h.snippet || h.sectionName || "")
-                 .replace(/\s+/g, " ").trim()).slice(0, 600)
-          })).filter(x => x.x.length > 15);
+    /* 公网页（非本机托管）连不到 127.0.0.1 的代理，直接跳过本机探测，
+       不长等硬超时 —— 否则会把整轮 gather() 拖死。 */
+    if(local){
+      const p = await this.detectPort();
+      const P = (String(location.port) === p) ? "" : "http://127.0.0.1:" + p;
+      try{
+        const r = await this._t(P + "/search?q=" + encodeURIComponent(q) + "&n=4", 8000);
+        if(r.ok){
+          const j = await r.json();
+          if(j && j.hits && j.hits.length){
+            return j.hits.map(h => ({
+              t: (h.sectionName ? "[" + h.sectionName + "] " : "") + (h.title || "（无标题）"),
+              x: ((h.date ? h.date + "　" : "") + String(h.snippet || h.sectionName || "")
+                   .replace(/\s+/g, " ").trim()).slice(0, 600)
+            })).filter(x => x.x.length > 15);
+          }
         }
-      }
-    }catch(e){ /* 代理没开或超时，走降级 */ }
+      }catch(e){ /* 代理没开或超时，走降级 */ }
+    }
 
-    via = "公开栏目";
     try{
-      const r2 = await this._t("https://r.jina.ai/https://www.gxmu.edu.cn/xwgk/wwtz/", 14000);
+      const r2 = await this._t("https://r.jina.ai/https://www.gxmu.edu.cn/xwgk/wwtz/", 10000);
       if(r2.ok){
         const t = String(await r2.text() || "").replace(/\s+/g, " ").trim();
         if(t.length > 150)
@@ -5002,9 +5004,9 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
     var foot = document.getElementById("todofoot");
     if(cache && !force){ renderTodo(cache, cache.__live); return; }
     body.innerHTML = '<div class="empty">载入中…</div>';
-    /* 2026-10-14 改：优先**实时抓取** —— 调云函数 /campus，服务端当场去校网抓，
-       拿回来就是最新公告。静态 data/todo.json 只作兜底。
-       原来只读静态快照 → 快照不会自己更新 → 那个「刷新」按钮点了等于没点。 */
+    /* 2026-10-14 精简云函数调用：
+       平时打开抽屉只读**静态快照** data/todo.json（0 次云函数调用，秒开）。
+       只有用户主动点「刷新」（force=true）才调一次云函数 /campus 实时抓校网。 */
     var useFallback = function(e1){
       fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
         .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -5012,14 +5014,15 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
           withInner(d, function(){ renderTodo(d, false); }); })
         .catch(function(e){
           body.innerHTML = '<div class="empty">读不到待办数据。<br><br>' +
-            '<span style="font-size:12px">实时接口与静态快照都没取到。<br>' +
+            '<span style="font-size:12px">静态快照没取到。<br>' +
             '(' + ((e && e.message) || e || e1 || '未知') + ')</span></div>';
           foot.textContent = "";
         });
     };
     var cb = (typeof window.cloudBase === 'function') ? window.cloudBase() : '';
-    if(!cb){ useFallback(); return; }
-    fetch(cb + "/campus?limit=200&refresh=" + (force ? 1 : 0) + "&t=" + Date.now(), {cache:"no-store"})
+    /* 没点刷新、或云函数不可用 → 直接静态快照，不惊动云函数（省调用量） */
+    if(!force || !cb){ useFallback(); return; }
+    fetch(cb + "/campus?limit=200&refresh=1&t=" + Date.now(), {cache:"no-store"})
       .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function(d){
         if(d && d.ok && d.items && d.items.length){ cache = d; cache.__live = true;
@@ -5141,22 +5144,16 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
       (d.updated_at ? " ｜ 更新于 " + d.updated_at : "");
   }
 
-  // 启动后顺手取一次数量（优先实时接口 /campus，回落静态快照）
+  // 启动后顺手取一次数量 —— 2026-10-14 精简：只读**静态快照**，不调云函数。
+  // 用户想拿最新公告，点抽屉里的「刷新」即可（那时才调一次 /campus）。
   setTimeout(function(){
-    var setCnt = function(d){
-      cache = d; if(d) d.__live = !!d.__live;
-      var cn = document.getElementById("todocnt");
-      if(cn && d && d.items) cn.textContent = " " + d.items.length;
-    };
-    var cb = (typeof window.cloudBase === 'function') ? window.cloudBase() : '';
-    var u = cb ? (cb + "/campus?limit=200&t=" + Date.now()) : "data/todo.json?t=" + Date.now();
-    fetch(u, {cache:"no-store"})
+    fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
-        if(d && d.ok && d.items && d.items.length){ d.__live = true; setCnt(d); return; }
-        return fetch("data/todo.json?t=" + Date.now(), {cache:"no-store"})
-          .then(function(r){ return r.ok ? r.json() : null; })
-          .then(function(s){ if(s) s.__live = false; setCnt(s); });
+        if(!d) return;
+        d.__live = false; cache = d;
+        var cn = document.getElementById("todocnt");
+        if(cn && d.items) cn.textContent = " " + d.items.length;
       }).catch(function(){});
   }, 1200);
 })();
@@ -5167,6 +5164,6 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
 <!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
-<script src="agent.js?v=2026.10.14-agent7"></script>
+<script src="agent.js?v=2026.10.14-agent8"></script>
 </body>
 </html>
