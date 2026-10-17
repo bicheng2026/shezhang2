@@ -2,9 +2,9 @@
   "lock": true,
   "salt": "4c61c6a3bb7e425f",
   "admin": "f9be6975a6b079356ffbbb9dfaab6420c18cb1c6d451bb34d4ae83bc5c46f579",
-  "user": "42d67a524f758fc636da7b3718f4c0e88500094e1ac4ef42bd4c5da1bff81c66",
-  "temp": true,
+  "user": "",
+  "temp": false,
   "issuedAt": 1792228002562,
-  "until": 1792314402562,
+  "until": 0,
   "note": "运行时口令配置。由管理员后台经云函数写入（token 不经过前端）。"
 }
