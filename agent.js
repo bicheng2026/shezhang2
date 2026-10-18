@@ -90,10 +90,20 @@ const TOOL_SCHEMA = [
     type:"function",
     function:{
       name:"net_search",
-      description:"联网检索公开网络资料（通用网页搜索），用于时效性信息（最新新闻、事件、政策、指南共识、考试范围公告、天气等）。只传问题本身，绝不要把教材原文拼进来。返回结果须标〔网n〕。需要用户已在页面开启联网。",
+      description:"联网检索公开网络资料（DeepSeek 官方搜索，覆盖中英文全网），用于时效性信息（最新新闻、事件、政策、指南共识、考试范围公告、天气等）。只传问题本身，绝不要把教材原文拼进来。返回结果须标〔网n〕。需要用户已在页面开启联网。",
       parameters:{ type:"object", properties:{
         q:{type:"string", description:"检索问句，只写问题本身"}
       }, required:["q"]}
+    }
+  },
+  {
+    type:"function",
+    function:{
+      name:"read_url",
+      description:"抓取指定网址的正文并转成 Markdown 纯文本。用在：net_search 返回了高相关链接、需要读全文才能答；或用户直接贴了一个链接让你看。一次只抓一个页面。",
+      parameters:{ type:"object", properties:{
+        url:{type:"string", description:"完整网址，必须以 http:// 或 https:// 开头"}
+      }, required:["url"]}
     }
   },
   {
@@ -142,6 +152,8 @@ const TOOLS_PROMPT = [
 "     它给的是**实时抓取**的学校官网清单，带截止日和原文链接；get_todo 没命中再考虑 net_search。",
 "     典型触发：「最近有什么通知」「有什么待办」「XX 什么时候截止」「XX 报名到几号」「申报开始了没」。",
 "  5）用户提到了自己上传的附件 —— 用 read_attach。",
+"  5b）net_search 返回了明显相关的长链接、或用户直接贴了网址 —— 用 read_url 抓正文再答，别只看摘要。",
+"      read_url 抓到的是外部网页；引用时报网页标题和链接，与教材冲突时以教材原文为准。",
 "  6）第一轮检索结果不够、或明显跑偏 —— 换关键词再查一轮，别急着答。",
 "",
 "怎么引用：",
@@ -373,6 +385,27 @@ const HANDLERS = {
     }catch(e){ return {ok:false, msg:"联网失败：" + e.message}; }
   },
 
+  /* 抓单页正文（DeepSeek Fetch）。给「搜到好文 → 读全文」用。
+     只回正文，不落盘、不进长期记忆。 */
+  async read_url(a){
+    const u = String((a && a.url) || "").trim();
+    if(!u) return {ok:false, msg:"缺少 url"};
+    if(!/^https?:\/\//i.test(u)) return {ok:false, msg:"url 必须带 http:// 或 https://"};
+    if(typeof NET === "undefined" || !NET || !NET.fetchPage)
+      return {ok:false, msg:"联网模块未就绪，无法抓取网页"};
+    try{
+      const r = await Promise.race([
+        NET.fetchPage(u),
+        new Promise(res => setTimeout(() => res({ __timeout:1 }), 16000))
+      ]);
+      if(r && r.__timeout) return {ok:false, msg:"抓取超时（目标站点太慢或拒绝访问）"};
+      const txt = String(r.content || "").replace(/\n{3,}/g, "\n\n").trim();
+      if(!txt) return {ok:false, msg:"该页没有可提取的正文"};
+      return {ok:true, title:r.title || "", url:u, text:clip(txt, 6000),
+              tip:"引用时给出网页标题和链接；这是外部资料，与教材冲突时以教材原文为准"};
+    }catch(e){ return {ok:false, msg:"抓取失败：" + e.message}; }
+  },
+
   async get_todo(a){
     try{
       /* ① 先要**实时**的：调云函数 /campus，当场服务端抓校网（真·最新）。
@@ -484,8 +517,8 @@ const HANDLERS = {
 /* 工具名 → 界面上显示的中文（轨迹用） */
 const TOOL_CN = {
   search_library:"检索文库", read_chapter:"读取章节", locate_doc:"定位书目",
-  read_doc_head:"读取册开头", net_search:"联网检索", get_todo:"读取待办公告",
-  read_attach:"读取附件", remember:"写入记忆"
+  read_doc_head:"读取册开头", net_search:"联网检索", read_url:"读取网页",
+  get_todo:"读取待办公告", read_attach:"读取附件", remember:"写入记忆"
 };
 
 /* ==================================================================
