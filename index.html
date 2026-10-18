@@ -4045,6 +4045,13 @@ document.getElementById("sesmask").addEventListener("click", e=>{ if(e.target.id
 document.getElementById("memmask").addEventListener("click", e=>{ if(e.target.id==="memmask") closeMem(); });
 document.getElementById("netmask").addEventListener("click", e=>{ if(e.target.id==="netmask") closeNet(); });
 
+/* PDF iframe 载入完成就收起提示（Chrome 内置阅读器触发 load 的时机不完全一致，
+   所以 rdPdfLoading 里另有 30 秒兜底） */
+(function(){
+  var f = document.getElementById("rdPdf");
+  if(f) f.addEventListener("load", function(){ try{ rdPdfLoading(false); }catch(e){} });
+})();
+
 /* 手机上长按「联网」= 右键 → 进联网设置（面板）。短按仍是开关。 */
 (function(){
   const b = document.getElementById("netbtn");
@@ -4336,6 +4343,41 @@ window.rdPickPart = function(i){
    拉不到就当空表 → 全部走 1 号仓，不影响文字版。
    2026-10-18：由 1.2 秒提前到 0.4 秒 —— 越早到，打开书时越不用现等。 */
 setTimeout(function(){ try{ window.loadPdfMap(); }catch(e){} }, 400);
+/* PDF 载入提示（2026-10-18）
+   首屏做了线性化之后通常几百 KB 就出来了，但大册 + 慢网仍可能等几秒到几十秒。
+   给个「正在载入第 1 页…」的浮层，8 秒后文案改成「这册比较大」，
+   30 秒兜底自动收起（免得万一把界面挡住）。 */
+var _rdLoadTimer = null;
+function rdPdfLoading(on){
+  var el = document.getElementById("rdpdftip");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "rdpdftip";
+    el.style.cssText = "position:absolute;inset:0;display:none;align-items:center;justify-content:center;"
+      + "pointer-events:none;z-index:6;color:#e8eef0;font-size:13.5px;letter-spacing:.3px;"
+      + "background:rgba(60,66,70,.45);text-align:center;padding:24px;line-height:1.8";
+    var host = document.getElementById("rdPdf");
+    if(host && host.parentNode){
+      host.parentNode.style.position = "relative";
+      host.parentNode.appendChild(el);
+    }else{
+      document.body.appendChild(el);
+    }
+  }
+  if(_rdLoadTimer){ clearTimeout(_rdLoadTimer); _rdLoadTimer = null; }
+  if(!on){ el.style.display = "none"; el.textContent = ""; return; }
+  el.textContent = "正在载入第 1 页…";
+  el.style.display = "flex";
+  _rdLoadTimer = setTimeout(function(){
+    if(el.style.display !== "flex") return;
+    el.textContent = "这册比较大，还在下载…（首屏已优化，一般几秒内出来）";
+    _rdLoadTimer = setTimeout(function(){
+      if(el.style.display === "flex") el.style.display = "none";
+    }, 22000);
+  }, 8000);
+}
+window.rdPdfLoading = rdPdfLoading;
+
 window.toggleRdView = function(force){
   if(!_rdPdfUrl) return;
   _rdPdfOn = (force === undefined) ? !_rdPdfOn : !!force;
@@ -4345,7 +4387,10 @@ window.toggleRdView = function(force){
   var btn = document.getElementById("rdviewbtn");
   if(_rdPdfOn){
     if(pdf){
-      if(pdf.getAttribute("src") !== _rdPdfUrl) pdf.setAttribute("src", _rdPdfUrl);
+      if(pdf.getAttribute("src") !== _rdPdfUrl){
+        pdf.setAttribute("src", _rdPdfUrl);
+        rdPdfLoading(true);          /* 换册/首次打开：先给个「正在载入」 */
+      }
       pdf.style.display = "block";
     }
     if(txt) txt.style.display = "none";
@@ -4356,6 +4401,7 @@ window.toggleRdView = function(force){
     if(txt) txt.style.display = "block";
     if(lst) lst.style.display = "";
     if(btn) btn.textContent = "📄 原版PDF";
+    rdPdfLoading(false);
   }
   /* 全屏按钮只在看 PDF 时有意义，文字版没 PDF 就不用出现 */
   var fb = document.getElementById("rdfullbtn");
