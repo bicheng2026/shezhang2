@@ -392,19 +392,20 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--ink);line-height:1.6">
       <input type="checkbox" id="netsw" onchange="NET.setSw(this.checked)" style="width:auto;margin:3px 0 0;flex-shrink:0">
-      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">每轮提问自动并发检索，数秒硬超时；超时或不通则自动跳过，不影响文库问答。</span></span>
+      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">打开即用，不用再勾任何通道。每轮问答按需检索，不通就自动跳过，不影响文库作答。</span></span>
     </label>
 
     <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">联网信息来源</div>
-    <div class="hint" style="margin:0 0 6px;line-height:1.8">
-      <b style="color:#7fb069">一条 Key 都不用填</b> —— <b>「全网搜索」</b>由本站自己的云函数在服务端实时搜 360 / 必应，中英文都行、国内直连、手机也能用。<br>
-      校园公告另走「待办」的<b>实时抓取</b>（不经搜索引擎）。<br>
-      <span style="opacity:.8">维基百科 / Jina / 必应属境外通道，需科学上网；不开也完全能用。</span>
+    <div class="hint" style="margin:0 0 8px;line-height:1.8">
+      <b style="color:#7fb069">一条 Key 都不用填</b> —— 搜索由本站自己的云函数在服务端调
+      <b>DeepSeek 官方搜索引擎</b>：千亿网页索引，按相关性 / 权威度 / 时效综合排序，中英文都行，国内直连、手机也能用。<br>
+      已经在「设置」里填了 DeepSeek Key 的，搜索会<b>优先用你自己那把</b>（花自己的额度）；
+      没填就走站长兜底。<br>
+      校园公告不走搜索引擎，走「待办」的<b>实时抓取</b>。
     </div>
     <div class="hint" style="margin:0 0 8px;line-height:1.8">
-      每条通道右侧的「启用」可手动开 / 关 —— 关掉的通道不参与检索。<br>
-      <b style="color:#e07a6a">「全网搜索」要求本站配有自己的云函数</b>（<code>data/cloud.json</code> 的 <code>cloud</code> 字段）；
-      没配时该通道自动关闭，<b>绝不会借用别人的云函数</b>。
+      <b style="color:#e07a6a">需要本站配有自己的云函数</b>（<code>data/cloud.json</code> 的 <code>cloud</code> 字段）；
+      没有时此通道自动关闭，<b>绝不会借用别人的云函数</b>。
     </div>
     <div id="netlist"></div>
 
@@ -609,11 +610,31 @@ let ACCESS = null;
 /* 带时间戳绕开 GitHub Pages 的 10 分钟 CDN 缓存 */
 function bust(u){ return u + (u.indexOf('?')>=0 ? '&' : '?') + 't=' + Date.now(); }
 
+/* 🔴 2026-10-18 修「后台又开又锁都没用」：
+   本机自托管（校园网代理 8894 / 桌面 --app 启动器）打开的是 http://127.0.0.1:xxxx，
+   fetch('data/access.json') 读的是**本机磁盘**那份文件；而后台改锁写的是 GitHub。
+   两边一分叉，本机就永远看到旧状态。
+   ⇒ 本机模式下**优先读线上那份**（Pages 带 Access-Control-Allow-Origin: *），
+     读不到（断网 / 离线）再回落本地文件，不至于把人关在门外。 */
+const ACC_LIVE = "https://bicheng2026.github.io/shezhang2/data/access.json";
+const IS_LOCAL = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+function accTimeout(p, ms){
+  return Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error("acc-timeout")), ms || 4000))]);
+}
 async function loadAccess(){
-  try{
-    const r = await fetch(bust('data/access.json'), {cache:'no-store'});
+  const grab = async (u) => {
+    const r = await accTimeout(fetch(u, {cache:'no-store'}), 4000);
     if(!r.ok) throw new Error('HTTP ' + r.status);
-    ACCESS = await r.json();
+    const j = await r.json();
+    if(!j || typeof j !== 'object') throw new Error('bad json');
+    return j;
+  };
+  if(IS_LOCAL){
+    try{ ACCESS = await grab(ACC_LIVE + "?t=" + Date.now()); return ACCESS; }
+    catch(e){ /* 断网 → 回落本地那份 */ }
+  }
+  try{
+    ACCESS = await grab(bust('data/access.json'));
   }catch(e){
     /* 读不到就退回「不锁」：宁可放行也别把站长自己关在门外 */
     ACCESS = {lock:false, _err:String(e&&e.message||e)};
@@ -691,8 +712,10 @@ window.showChangePw = function(){
     var e = document.getElementById('cperr');
     if(a.length < 6){ e.textContent = '至少 6 位'; return; }
     if(a !== b){ e.textContent = '两次输入不一致'; return; }
-    /* 密码存本浏览器（不上传、不进仓库）——重置全网口令不会影响已改密码的人 */
-    try{ localStorage.setItem('sz2_mypw', a); }catch(_){}
+    /* 密码存本浏览器（不上传、不进仓库）——重置全网口令不会影响已改密码的人。
+       🔴 必须存 SHA-256 摘要：登录校验比的是 sha256(输入) === 本地值。
+          2026-10-18 修：以前这里存的是**明文**，于是「设完自己的密码，下次反而进不去」。 */
+    try{ localStorage.setItem('sz2_mypw', await sha256Hex(a)); }catch(_){}
     var l = document.getElementById('lock'); if(l) l.style.display = 'none';
     var ap = document.getElementById('app'); if(ap) ap.style.display = 'flex';
     sessionStorage.setItem('sz2_ok','1');
@@ -1323,7 +1346,7 @@ async function decBytes(rel, buf, start){
    单章按字节区间精准取，避免整卷下载。 */
 const RAWBASE = "https://raw.githubusercontent.com/bicheng2026/shezhang2/main/lib/";
 let DOCS = [], cache = {}, busy = false;
-const VERSION = "2026.09.16";
+const VERSION = "2026.10.18";
 
 /* ============ 密码 ============ */
 async function sha256(s){
@@ -1337,11 +1360,26 @@ async function sha256(s){
      ⇒ 管理员「重置全网口令」不影响已改过密码的人，但拿旧链接的新人进不来 */
 let ACCESS = null;
 function accBust(u){ return u + (u.indexOf("?")>=0 ? "&" : "?") + "t=" + Date.now(); }
+/* 同第 1 段：本机自托管时，磁盘上的 access.json 与后台写入的 GitHub 那份会分叉，
+   所以本机优先读线上，读不到再回落本地。 */
+const ACC_LIVE2 = "https://bicheng2026.github.io/shezhang2/data/access.json";
+const IS_LOCAL2 = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+function accRace(p, ms){
+  return Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error("acc-timeout")), ms || 4000))]);
+}
 async function loadAccess(){
-  try{
-    const r = await fetch(accBust("data/access.json"), {cache:"no-store"});
-    ACCESS = r.ok ? await r.json() : {lock:false, _missing:true};
-  }catch(e){ ACCESS = {lock:false, _err:String(e && e.message || e)}; }
+  const grab = async (u) => {
+    const r = await accRace(fetch(u, {cache:"no-store"}), 4000);
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if(!j || typeof j !== "object") throw new Error("bad json");
+    return j;
+  };
+  if(IS_LOCAL2){
+    try{ ACCESS = await grab(ACC_LIVE2 + "?t=" + Date.now()); return ACCESS; }catch(e){}
+  }
+  try{ ACCESS = await grab(accBust("data/access.json")); }
+  catch(e){ ACCESS = {lock:false, _err:String(e && e.message || e)}; }
   return ACCESS;
 }
 function accPwHash(pw, salt){ return sha256((salt||"sz1") + "::" + pw); }
@@ -1355,7 +1393,16 @@ async function unlock(){
   const v = el ? el.value.trim() : "";
   if(!v) return;
   if(!ACCESS) await loadAccess();
-  const myPw = localStorage.getItem("sz2_mypw");
+  let myPw = localStorage.getItem("sz2_mypw");
+  /* 迁移：旧版「设置 → 改访问密码」把摘要写进了 sz2_pw，而登录只读 sz2_mypw ——
+     两边不同键，所以「设了密码不生效」。这里把旧键搬过来并清掉。 */
+  if(!myPw){
+    const legacy = localStorage.getItem("sz2_pw");
+    if(legacy){
+      try{ localStorage.setItem("sz2_mypw", legacy); localStorage.removeItem("sz2_pw"); }catch(e){}
+      myPw = legacy;
+    }
+  }
   if(myPw){
     /* 已设过自己密码：只认本地的，管理员重置不影响 */
     if(await sha256(v) === myPw){ return enterSite(); }
@@ -1955,6 +2002,12 @@ async function ask(opt){
     }
   }
   if(opt.q == null){ el.value = ""; el.style.height = "auto"; }
+  /* 正文还没从大仓读出来就先抢读一次 —— 否则下面 addMsg 一 push，
+     当前会话会被覆盖成「只有这一条」，看着就是「历史被截断」。 */
+  try{
+    const cs = SS.cur();
+    if(cs && !cs.msgs && (cs.n || 0) > 0) await SS.hydrate(cs.id);
+  }catch(e){}
   busy = true; document.getElementById("send").disabled = true;
 
   _lastQ = q;
@@ -2772,6 +2825,15 @@ const IDB = {
       tx.onerror    = ()=>rej(tx.error || new Error("idb-del-fail"));
       tx.onabort    = ()=>rej(tx.error || new Error("idb-abort"));
     });
+  },
+  /* 列出所有键 —— 目录键（idx）丢了时用它把会话重建回来，避免「历史全没了」 */
+  async keys(){
+    const db = await this.open();
+    return await new Promise((res, rej)=>{
+      const rq = db.transaction(this.store, "readonly").objectStore(this.store).getAllKeys();
+      rq.onsuccess = ()=>res(rq.result || []);
+      rq.onerror   = ()=>rej(rq.error);
+    });
   }
 };
 
@@ -2800,6 +2862,30 @@ const SS = {
     catch(e){ this._useIdb = false; }
     let idx = null;
     if(this._useIdb){ try{ idx = await _to(IDB.get("idx"), 3000); }catch(e){} }
+    /* 🔴 目录键丢了 / 被截断，但正文很可能还躺在仓里。
+       老代码这里直接跳到 localStorage 迁移分支 → 迁移源是空的 → 新建一个空会话，
+       用户看到的就是「历史全没了 / 只剩几条」。现在先扫一遍重建目录。 */
+    if(this._useIdb && !(Array.isArray(idx) && idx.length)){
+      try{
+        const ks = await _to(IDB.keys(), 2500);
+        const sk = (ks || []).filter(k => typeof k === "string" && k.slice(0, 2) === "s:");
+        if(sk.length){
+          const arr = [];
+          for(const k of sk){
+            let msgs = null;
+            try{ msgs = await _to(IDB.get(k), 2500); }catch(e){ msgs = null; }
+            const mets = Array.isArray(msgs) ? msgs.filter(r => r && r.cls === "me") : [];
+            const t0 = mets[0] ? String(mets[0].html || "").replace(/<[^>]*>/g, "").trim().slice(0, 18) : "";
+            const last = (Array.isArray(msgs) && msgs.length) ? (msgs[msgs.length - 1].ts || 0) : 0;
+            arr.push({ id:k.slice(2), title:t0 || "旧会话", ts:last || Date.now(),
+                       n:Array.isArray(msgs) ? msgs.length : 0 });
+          }
+          arr.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+          idx = arr;
+          try{ await IDB.set("idx", arr); }catch(e){}
+        }
+      }catch(e){ /* 扫不动就算了，下面照常走迁移 */ }
+    }
     if(this._useIdb && Array.isArray(idx) && idx.length){
       this.list = idx.map(m => ({id:m.id, title:m.title || "新会话", ts:m.ts || Date.now(),
                                  n:m.n | 0, msgs:null}));
@@ -2812,12 +2898,12 @@ const SS = {
       if(old.length){
         this.list = old.map(s => ({id:s.id, title:s.title || "新会话", ts:s.ts || Date.now(),
                                    n:Array.isArray(s.msgs) ? s.msgs.length : 0,
-                                   msgs:Array.isArray(s.msgs) ? s.msgs : []}));
+                                   msgs:Array.isArray(s.msgs) ? s.msgs : null}));
         if(this._useIdb){
           try{
             await IDB.set("idx", this.list.map(s => ({id:s.id, title:s.title, ts:s.ts,
                                                       n:s.msgs ? s.msgs.length : (s.n || 0)})));
-            for(const s of this.list) await IDB.set("s:" + s.id, (s.msgs || []).map(stripRec));
+            for(const s of this.list){ if(s.msgs) await IDB.set("s:" + s.id, s.msgs.map(stripRec)); }
             try{ localStorage.removeItem(this.K); }catch(e){}   /* 搬完就把那 5MB 让出来 */
           }catch(e){ this._useIdb = false; }
         }
@@ -2829,20 +2915,35 @@ const SS = {
     await this.hydrate(this.curId);
   },
 
-  /* 把某个会话的正文从仓里取出来（目录里只有元信息，正文按需加载） */
+  /* 把某个会话的正文从仓里取出来（目录里只有元信息，正文按需加载）
+     🔴 2026-10-18 修「历史老是截断」：老代码读不到就 `s.msgs = []`，
+        下一次 flush 又把空数组写回大仓 —— 等于**把正文永久抹掉**。
+        现在读失败保持 msgs = null，标记 _failed，界面给「重试」，绝不写回空。 */
   async hydrate(id){
     const s = this.list.find(x => x.id === id);
     if(!s) return null;
     if(s.msgs) return s;
-    if(this._useIdb){
+    if(!this._useIdb){ s.msgs = []; s.n = 0; return s; }
+    for(let attempt = 0; attempt < 2; attempt++){
       try{
         const m = await Promise.race([IDB.get("s:" + id),
-          new Promise((_, rj) => setTimeout(() => rj(new Error("idb-timeout")), 4000))]);
-        s.msgs = Array.isArray(m) ? m : [];
-      }catch(e){ s.msgs = []; }
-    }else s.msgs = [];
-    s.n = s.msgs.length;
+          new Promise((_, rj) => setTimeout(() => rj(new Error("idb-timeout")), 6000))]);
+        if(Array.isArray(m)){ s.msgs = m; s.n = m.length; s._failed = false; return s; }
+        /* 仓里确实没有这一条（老会话 / 已被清）→ 空是真实结果 */
+        s.msgs = []; s.n = 0; s._failed = false; return s;
+      }catch(e){ /* 超时或读写失败：再试一次，仍失败就保持 null */ }
+    }
+    s._failed = true;
     return s;
+  },
+
+  /* 界面上的「重试载入」 */
+  async retryLoad(){
+    const s = this.cur();
+    if(!s) return;
+    s._failed = false; s.msgs = null;
+    await this.hydrate(s.id);
+    renderChat();
   },
 
   /* —— 落盘（防抖：连续打字/流式输出不会每条都写一次） —— */
@@ -2884,8 +2985,9 @@ const SS = {
                 + "多半是浏览器开了无痕/隐私模式 —— 换普通窗口重开本页即可恢复。");
       }
       /* 降级通道：localStorage。满了也不静默删 —— 会明说砍了几个 */
+      /* 未加载正文的会话写成 null（而不是空数组），下次读出来还能知道「没加载过」 */
       const payload = this.list.map(s => ({id:s.id, title:s.title, ts:s.ts,
-                                           msgs:(s.msgs || []).map(stripRec)}));
+                                           msgs: s.msgs ? s.msgs.map(stripRec) : null}));
       try{
         localStorage.setItem(this.K, JSON.stringify(payload));
         this._dirty.clear();
@@ -2988,7 +3090,25 @@ const SS = {
 
   push(rec){
     const s = this.cur();
-    if(!s.msgs) s.msgs = [];
+    /* 🔴 正文还没从大仓读出来就往里塞，会把整段历史覆盖成「只剩这一条」。
+       仓里明明有内容（s.n > 0）却 msgs 为空 → 先抢读一次；实在读不到就
+       放弃本次落盘（气泡照常显示），绝不拿一条新消息覆盖旧历史。 */
+    if(!s.msgs){
+      if(s.n > 0){
+        /* 正文还没加载：**先抢读，读到再补上这一条**。
+           绝不拿一条新消息覆盖旧历史，也不白丢这条新消息。 */
+        console.warn("[SS] 正文未加载，改为后台抢读后再落盘");
+        const self = this;
+        this.hydrate(s.id).then(()=>{
+          if(!s.msgs) return;
+          if(s.msgs.indexOf(rec) < 0){ s.msgs.push(rec); s.n = s.msgs.length; }
+          s.ts = Date.now();
+          self._dirty.add(s.id); self.save();
+        }).catch(()=>{});
+        return;
+      }
+      s.msgs = [];
+    }
     s.msgs.push(rec);
     s.n = s.msgs.length;
     this.trim_(s);
@@ -3057,7 +3177,11 @@ function renderChat(){
   c.innerHTML = "";
   if(!s.msgs){
     /* 正文还没从仓里取出来（切会话时的空档），先给个提示，别让人以为被截断 */
-    c.innerHTML = `<div id="loading"><div style="color:var(--teal);font-size:15px;margin-bottom:8px">正在载入该会话…</div>
+    c.innerHTML = s._failed
+      ? `<div id="loading"><div style="color:#e07a6a;font-size:15px;margin-bottom:8px">这条会话暂时没读出来</div>
+         <div style="font-size:12px;opacity:.75">本机大仓响应超时，正文没有丢。点下面重试一次，或稍后重新打开。</div>
+         <div style="margin-top:14px"><button class="iconbtn" onclick="SS.retryLoad()">重试载入</button></div></div>`
+      : `<div id="loading"><div style="color:var(--teal);font-size:15px;margin-bottom:8px">正在载入该会话…</div>
       <div style="font-size:12px;opacity:.7">历史正文按需从本机大仓读取，稍等半秒。</div></div>`;
     return;
   }
@@ -3174,28 +3298,16 @@ async function distill(q, ans, cfg){
 const WIKI_ZH = "https://zh.wikipedia.org/w/api.php";
 const WIKI_EN = "https://en.wikipedia.org/w/api.php";
 
+/* 2026-10-18 联网源收敛：只留一条 —— DeepSeek 官方 Search（经本站云函数代理）。
+   移除的旧通道：维基百科 / Jina Reader / 必应 RSS / PubMed。
+   理由：要么要科学上网、要么只有百科/文献、要么解析脆弱；留着只是把每一轮
+   提问的并发数拉高、把首字时间拉长。DeepSeek 自研索引覆盖中英文全网，
+   相关性/权威度/时效综合排序，且天然支持 site:/lang:/after: 等检索语法。
+   要抓单页正文走同一个云函数端点（?url= → DeepSeek Fetch）。 */
 const NET_SRC = [
-  { id:"web", name:"全网搜索（免 Key）", kind:"web", need:false, ownOnly:true,
-    desc:"经**本站自己的**云函数实时搜全网（360 主 / 必应备），返回标题+摘要+原文链接 · 免 Key、国内直连、手机也能用",
+  { id:"ds", name:"DeepSeek 全网搜索", kind:"ds", need:false, ownOnly:true,
+    desc:"经**本站自己的**云函数调 DeepSeek 官方搜索引擎 · 千亿网页索引、综合排序 · 免 Key、国内直连、手机也能用",
     probe:"" },
-  { id:"zhwiki", name:"中文维基百科", kind:"zhwiki", need:true,
-    desc:"免 Key · 搜索条目并取首段摘要 · 原生跨域（origin=*）",
-    probe:"https://zh.wikipedia.org/w/api.php?action=query&format=json&origin=*&meta=siteinfo" },
-  { id:"enwiki", name:"英文维基百科", kind:"enwiki", need:true,
-    desc:"免 Key · 英文条目更全，适合查概念、术语、人名",
-    probe:"https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&meta=siteinfo" },
-  { id:"jina", name:"Jina Reader", kind:"jina", need:true,
-    desc:"免 Key · 抓取任意网页正文并转纯文本（适合直接贴链接）",
-    probe:"https://r.jina.ai/https://example.com" },
-  { id:"bingrss", name:"必应搜索 RSS", kind:"bingrss", need:true,
-    desc:"免 Key · 域名国内可连，但无跨域头，须科学上网后经代理包装",
-    probe:"https://cn.bing.com/search?q=test&format=rss" },
-  { id:"pmd", name:"PubMed 文献摘要", kind:"pmd", need:false,
-    desc:"免 Key ·  NIH 官方接口，可直连 · 查英文医学文献题录与摘要（供学习参考）",
-    probe:"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=shock&retmode=json&retmax=1" },
-  { id:"gxmu", name:"广西医科大学官网（含内网查看）", kind:"gxmu", need:false,
-    desc:"实时抓校网各栏目 · 需在本机运行校园网代理（web/gxmu_proxy.py，二号默认 8894）；连着校园网时连「内网查看」也能读到。代理没开则自动降级为公开栏目",
-    probe:"http://127.0.0.1:8894/ping" },
 ];
 
 const NET = {
@@ -3226,7 +3338,10 @@ const NET = {
   setSw(v){
     this.on = !!v; this.save(); this.warned = false;
     applyNet(); renderNetStat();
-    if(this.on) this.probeAll();
+    /* 2026-10-18：打开开关不再自动探测 —— 探测本身就是一次真实搜索（要钱、要等）。
+       连通性由「检测连通性」按钮按需触发；平时直接打开就能用。 */
+    const p = document.getElementById("netprobe");
+    if(p && this.on) p.innerHTML = '<b style="color:var(--ok)">已开启</b> —— 下一条提问会自动联网检索；不顺就自动跳过。';
   },
   reset(){
     this.hits = 0; this.ok = 0; this.warned = false; this.cache = {};
@@ -3331,15 +3446,31 @@ const NET = {
       ? ""                                              /* 同源：代理本身就是网站 */
       : "http://127.0.0.1:" + this.gxmuPort();          /* 远端页：跨到本地（多半被拦） */
   },
-  /* 全网搜索：走本站云函数 /search（服务端抓 360/必应，免 Key）。
-     —— 公网、手机、任何网络都能用，不需要本机代理。 */
-  async _websearch(q){
+  /* 把「设置」里填的那把 DeepSeek Key 带进搜索请求头 —— 搜索花的是**你自己的**额度，
+     站长那台云函数的 DS_KEY 只作兜底。Key 不进 URL、不进日志。
+     只有接口地址确实是 DeepSeek 时才带（用别家端点的人 Key 不一样）。 */
+  dsHeader(){
+    try{
+      const base = String(localStorage.getItem("sz2_base") || "");
+      const key  = String(localStorage.getItem("sz2_key") || "").trim();
+      if(!key) return {};
+      if(!base || /deepseek\.com/i.test(base)) return {"X-DS-Key": key};
+    }catch(e){}
+    return {};
+  },
+
+  /* 全网搜索：走本站云函数 /search（服务端调 DeepSeek 官方 Search，360/必应为回落）。
+     —— 公网、手机、任何网络都能用，不需要本机代理、不需要另外配 Key。 */
+  async _dssearch(q, ori){
     /* 🔒 双保险：云函数不归本站自己 → 直接拒绝，绝不发起请求（保护站长额度） */
     if(!(typeof window.cloudIsOwn === "function" && window.cloudIsOwn()))
-      throw new Error("本站未配置自己的云函数，全网搜索不可用");
+      throw new Error("本站未配置自己的云函数，联网搜索不可用");
     const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
     if(!cb) throw new Error("未配置云函数地址");
-    const r = await this._t(cb + "/search?q=" + encodeURIComponent(q) + "&n=" + this.PER_SRC, 8000);
+    const u = cb + "/search?q=" + encodeURIComponent(q) + "&n=" + this.PER_SRC
+            + (ori ? "&ori_question=" + encodeURIComponent(String(ori).slice(0,120)) : "")
+            + "&t=" + Date.now();
+    const r = await this._t(u, 12000, {headers: this.dsHeader()});
     if(!r.ok) throw new Error("HTTP " + r.status);
     const j = await r.json();
     const arr = (j && j.items) || [];
@@ -3347,6 +3478,20 @@ const NET = {
       t: p.t || "（无标题）",
       x: String(p.x || "").replace(/\s+/g, " ").trim().slice(0, 500)
     })).filter(x => x.x.length > 12);
+  },
+
+  /* 抓单页正文（DeepSeek Fetch，返回 Markdown 纯文本）—— 给「读这篇」用 */
+  async fetchPage(url){
+    if(!(typeof window.cloudIsOwn === "function" && window.cloudIsOwn()))
+      throw new Error("本站未配置自己的云函数，抓取网页不可用");
+    const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
+    if(!cb) throw new Error("未配置云函数地址");
+    const r = await this._t(cb + "/search?url=" + encodeURIComponent(url) + "&t=" + Date.now(),
+                            15000, {headers: this.dsHeader()});
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    if(!j || !j.ok) throw new Error((j && j.msg) || "抓取失败");
+    return { title: j.title || "", content: String(j.content || ""), url: url };
   },
 
   async _gxmu(q){
@@ -3387,11 +3532,7 @@ const NET = {
     if(this.cache[ck]) return this.cache[ck];
     const kind = (NET_SRC.find(x=>x.id===id)||{}).kind;
     let out = [];
-    if(kind === "zhwiki")      out = await this._wiki(WIKI_ZH, q);
-    else if(kind === "enwiki") out = await this._wiki(WIKI_EN, q);
-    else if(kind === "pmd")    out = await this._pubmed(q);
-    else if(kind === "web")    out = await this._websearch(q);
-    else if(kind === "gxmu")   out = await this._gxmu(q);
+    if(kind === "ds")          out = await this._dssearch(q);
     this.cache[ck] = out;
     return out;
   },
@@ -3402,10 +3543,10 @@ const NET = {
     const t0 = performance.now();
     try{
       let pUrl = s.probe;
-      if(s.id === "web"){
+      if(s.id === "ds"){
         const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
         if(!cb) return {id:s.id, ok:false, ms:0, note:"未配置云函数地址"};
-        pUrl = cb + "/search?q=test&n=1";
+        pUrl = cb + "/search?q=test&n=1&t=" + Date.now();
       } else if(s.id === "gxmu"){
         await this.detectPort();          /* 先把端口找准，再探这条通道 */
         pUrl = this.gxmuBase() + "/ping";
@@ -3433,15 +3574,12 @@ const NET = {
     this.lastProbe = map;
     renderNetList(map);
     const okN = res.filter(r=>r.ok).length;
-    const domestic = res.filter(r=>r.ok && ["web","pmd"].includes(r.id)).length;
     if(box) box.innerHTML = okN
-      ? `<b style="color:var(--ok)">${okN}/${res.length} 条通道可用</b>`
-        + (domestic ? "，其中含可直连通道 —— 可以开启联网参考了。"
-                    : " —— 可以开启联网参考了（走的是需要科学上网的境外通道）。")
-      : `<b style="color:#e07a6a">0/${res.length} 条通道可用</b>。<br>
-         <b>可直连通道</b>：「全网搜索」免 Key、国内直连，但要求本站配有<b>自己的</b>云函数；PubMed 免 Key 可直接用；<br>
-         <b>境外通道</b>（维基百科 / Jina / 必应）需要开启科学上网后回来重测。<br>
-         眼下联网参考会自动降级跳过，<b>文库问答完全不受影响</b>。`;
+      ? `<b style="color:var(--ok)">联网可用</b>（DeepSeek 搜索已连通，最近一次 ${res.find(r=>r.ok).ms}ms）—— 打开上面的开关就能用。`
+      : `<b style="color:#e07a6a">联网不可用</b>。<br>
+         DeepSeek 搜索要求本站配有<b>自己的</b>云函数（<code>data/cloud.json</code> 的 <code>cloud</code> 字段），
+         且云函数环境变量里配了 <code>DS_KEY</code>。<br>
+         眼下联网会自动跳过，<b>文库问答完全不受影响</b>。`;
   },
 
   async gather(q){
@@ -3489,24 +3627,19 @@ function renderNetList(map){
   const box = document.getElementById("netlist"); if(!box) return;
   box.innerHTML = NET_SRC.map(s=>{
     const r = map && map[s.id];
-    /* ownOnly 通道（走云函数的全网搜索）在本站没有自己的云函数时，直接判为不可用 */
+    /* ownOnly 通道在本站没有自己的云函数时，直接判为不可用 */
     const ownBlocked = s.ownOnly && !NET.chOk(s);
     const st = ownBlocked ? `<span class="st bad">需自配云函数</span>`
       : !r ? `<span class="st">未检测</span>`
       : r.ok ? `<span class="st ok">通 ${r.ms}ms</span>`
       : r.skip ? `<span class="st">不可用</span>`
                : `<span class="st bad">不通</span>`;
-    const tag = s.need
-      ? `<span class="tag">需科学上网</span>`
-      : ownBlocked ? `<span class="tag" style="border-color:#7a4a3a;color:#e07a6a">本站无云函数</span>`
-      : `<span class="tag" style="border-color:#3a5a4a;color:#7fb069">可直接连</span>`;
-    const on = NET.isOn(s.id) && !ownBlocked;
-    const swRow = `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--dim);white-space:nowrap;cursor:pointer">
-        <input type="checkbox" ${on?"checked":""} onchange="netChanChange('${s.id}', this.checked)"
-          style="width:auto;margin:0;flex-shrink:0">启用</label>`;
-    return `<div class="srcrow" style="${on?"":"opacity:.45"}">
-      <div class="nm">${esc(s.name)}${tag}<i>${esc(s.desc)}</i></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${st}${swRow}</div>
+    const tag = ownBlocked
+      ? `<span class="tag" style="border-color:#7a4a3a;color:#e07a6a">本站无云函数</span>`
+      : `<span class="tag" style="border-color:#3a5a4a;color:#7fb069">可直接连接</span>`;
+    return `<div class="srcrow" style="${ownBlocked?"opacity:.45":""}">
+      <div class="nm">${esc(s.name)}${tag}<i>${esc(String(s.desc||"").replace(/\*\*/g,""))}</i></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">${st}</div>
     </div>`;
   }).join("");
 }
@@ -3826,7 +3959,13 @@ async function saveSet(){
   localStorage.setItem("sz2_tspeed", document.getElementById("tspeed").value);
   applyFont(); applyModel();
   const np = document.getElementById("npw").value.trim();
-  if(np){ localStorage.setItem("sz2_pw", await sha256(np)); alert("访问密码已更新，请牢记：" + np); }
+  if(np){
+    /* 🔴 键名必须是 sz2_mypw —— 登录校验（unlock）读的就是这个键。
+       以前写的是 sz2_pw，等于写进一个没人读的死键，所以「改密码」按钮形同虚设。 */
+    localStorage.setItem("sz2_mypw", await sha256(np));
+    try{ localStorage.removeItem("sz2_pw"); }catch(e){}
+    alert("访问密码已更新，请牢记：" + np + "\n（只对这台设备生效；忘了就清除本机数据重来）");
+  }
   closeSet();
 }
 document.getElementById("mask").addEventListener("click", e=>{ if(e.target.id==="mask") closeSet(); });
@@ -4102,8 +4241,9 @@ window.rdPickPart = function(i){
   window.toggleRdView(true);                   /* 内部会把 src 指过来并显示 PDF */
 };
 /* 提前把映射拉回来，免得点开书那一刻才发现要走哪个仓。
-   拉不到就当空表 → 全部走 1 号仓，不影响文字版。 */
-setTimeout(function(){ try{ window.loadPdfMap(); }catch(e){} }, 1200);
+   拉不到就当空表 → 全部走 1 号仓，不影响文字版。
+   2026-10-18：由 1.2 秒提前到 0.4 秒 —— 越早到，打开书时越不用现等。 */
+setTimeout(function(){ try{ window.loadPdfMap(); }catch(e){} }, 400);
 window.toggleRdView = function(force){
   if(!_rdPdfUrl) return;
   _rdPdfOn = (force === undefined) ? !_rdPdfOn : !!force;
@@ -4159,9 +4299,12 @@ window.rdFullscreen = function(){
   }catch(e){}
 };
 
-function openDoc(d){
+async function openDoc(d){
   showReader();
   window._curDoc = d;
+  /* 仓号表还没到就现拉一次 —— 表不到会算错仓库，PDF 直接打不开（也是「慢」的一种）。
+     正常情况下它早在页面启动 0.4 秒后就到了，这里 await 是瞬时的。 */
+  if(_pdfMap === null){ try{ await loadPdfMap(); }catch(e){} }
   _rdPdfParts = pdfPartsOf(d);
   _rdPdfIdx = 0;
   _rdPdfUrl = (_rdPdfParts && _rdPdfParts[0]) || "";
@@ -4218,23 +4361,41 @@ function openDoc(d){
       这时候应该落在第一个真正可用的册，而不是整本掉回文字版。 */
 function rdHeadProbe(d, u){
   var arr = (_rdPdfParts && _rdPdfParts.length > 1) ? _rdPdfParts.slice() : [u];
-  Promise.all(arr.map(function(url){
+  /* 2026-10-18 提速：**打开就切，探测放后台**。
+     老版本 Promise.all 探完所有册、全回来了才切 —— 一本 4 册就是 4 个网络往返，
+     文字版明明早就绪，却被这张网卡住，看着就是「PDF 打开特别慢」。
+     现在 iframe 直接指过去（能开就开），后台再确认哪一册真的存在。 */
+  try{ window.toggleRdView(true); }catch(e){}
+  var curIdx = _rdPdfIdx;
+  var probe = function(url){
     return fetch(url, {method: "HEAD", cache: "no-store"})
       .then(function(r){ return !!(r && r.ok); })
       .catch(function(){ return false; });
-  })).then(function(res){
+  };
+  probe(arr[curIdx] || u).then(function(ok){
     if(window._curDoc !== d) return;
-    _rdPartOK = res;                              /* 好册可点、坏册置灰划掉 */
-    /* 🔴 只在「当前这册探不到」时才自动挪到第一个好册。
-       老版本不管三七二十一直接跳到第一个可用册，会把主公已经挑好的册顶掉。 */
-    if(!res[_rdPdfIdx]){
-      for(var i = 0; i < res.length; i++){ if(res[i]){ _rdPdfIdx = i; _rdPdfUrl = arr[i]; break; } }
-    }
-    rdRenderParts();
-    var pv = document.getElementById("rdviewbtn");
-    if(pv) pv.style.display = _rdPdfUrl ? "inline-block" : "none";
-    window.toggleRdView(true);
-  }).catch(function(){});
+    _rdPartOK[curIdx] = ok;
+    if(ok){ rdRenderParts(); return; }
+    /* 当前这册探不到（可能还没推上去）：依次找第一个能用的 */
+    var i = 0;
+    var next = function(){
+      if(window._curDoc !== d) return;
+      if(i >= arr.length){
+        /* 一册都探不到 → 老实退回文字版，别让人盯着错误页 */
+        window.toggleRdView(false);
+        return;
+      }
+      if(i === curIdx){ i++; return next(); }
+      var k = i++;
+      probe(arr[k]).then(function(ok2){
+        if(window._curDoc !== d) return;
+        _rdPartOK[k] = ok2;
+        if(ok2){ _rdPdfIdx = k; _rdPdfUrl = arr[k]; rdRenderParts(); window.toggleRdView(true); return; }
+        next();
+      });
+    };
+    next();
+  });
 }
 async function readSec(d, i){
   const a = d.s[i][1];
@@ -5130,6 +5291,6 @@ function closeRdList(){ document.body.classList.remove("reader-list-open"); }
      这些顶层绑定；自身在加载期只做「定义 + 挂 window.AGENT」，
      不执行任何 DOM 或网络操作，所以不存在时序问题。 -->
 <!-- 带版本号：每次升级 Agent 内核改这里，避免同学浏览器吃到旧缓存 -->
-<script src="agent.js?v=2026.10.14-agent9"></script>
+<script src="agent.js?v=2026.10.18-agent10"></script>
 </body>
 </html>
