@@ -175,24 +175,45 @@ async function main() {
   })(), String(pdf).slice(0, 40))
 
   /* ---------------- 4. 联网：一点就连 ---------------- */
-  console.log('\n== 联网：一点就连，不用勾选 ==')
+  console.log('\n== 联网：点一下就开，右键才进设置 ==')
   const net = await ev(`(async()=>{
-    localStorage.removeItem('sz2_net');
-    NET.load();
+    localStorage.removeItem('sz2_net'); NET.load();
+    document.getElementById('netmask').style.display = 'none';
     const before = NET.on;
-    toggleNet();
-    await new Promise(r=>setTimeout(r,120));
+    document.getElementById('netbtn').click();
+    await new Promise(r=>setTimeout(r,200));
+    const tip = document.getElementById('nettip');
     return JSON.stringify({
-      before, after: NET.on,
+      before,
+      after: NET.on,
+      maskOpen: document.getElementById('netmask').style.display === 'flex',
       btn: document.getElementById('netbtn').textContent,
-      boxes: document.querySelectorAll('#netlist input[type=checkbox]').length,
-      chans: Object.keys(NET.chans()).length
+      tip: tip ? tip.textContent : '',
+      boxes: document.querySelectorAll('#netlist input[type=checkbox]').length
     });
   })()`)
   console.log('  ', net)
-  ok('点一下即开（无需勾通道）', /"after":true/.test(String(net)))
-  ok('按钮同步显示「开」', /联网：开/.test(String(net)))
-  ok('通道列表已无「启用」勾选框', /"boxes":0/.test(String(net)))
+  ok('单击即开，不弹面板', /"after":true/.test(String(net)) && /"maskOpen":false/.test(String(net)))
+  ok('按钮即时变「开」', /联网：开/.test(String(net)))
+  ok('弹出轻提示（不打断）', /联网已开启/.test(String(net)))
+  ok('通道列表无「启用」勾选框', /"boxes":0/.test(String(net)))
+
+  const ctx = await ev(`(async()=>{
+    document.getElementById('netmask').style.display = 'none';
+    document.getElementById('netbtn').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true}));
+    await new Promise(r=>setTimeout(r,120));
+    return document.getElementById('netmask').style.display === 'flex';
+  })()`)
+  ok('右键进联网设置（面板打开）', String(ctx) === 'true', String(ctx))
+
+  const off = await ev(`(async()=>{
+    document.getElementById('netmask').style.display = 'none';
+    NET.setSw(true);
+    document.getElementById('netbtn').click();
+    await new Promise(r=>setTimeout(r,120));
+    return NET.on;
+  })()`)
+  ok('再点一下即关', String(off) === 'false', String(off))
 
   /* ---------------- 5. 运行期异常 ---------------- */
   console.log('\n== 运行期异常 ==')
