@@ -337,7 +337,9 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
   <div id="bar">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
       <button class="thinkbtn" style="margin:0" onclick="document.getElementById('filein').click()">📎 上传</button>
-      <button id="netbtn" class="thinkbtn" style="margin:0" onclick="openNet()">🌐 联网：关</button>
+      <button id="netbtn" class="thinkbtn" style="margin:0" onclick="toggleNet()"
+        oncontextmenu="event.preventDefault();openNet();return false;"
+        title="点一下开关联网 · 右键进联网设置">🌐 联网：关</button>
       <button id="thinkbtn" class="thinkbtn" style="margin:0" onclick="toggleThink()" title="开启后模型会先推理再作答；设置面板里也有开关">💭 深度思考：关</button>
       <span id="modetag" style="display:none;font-size:12px;color:var(--teal);border:1px solid var(--teal);border-radius:20px;padding:5px 11px;cursor:pointer" onclick="askMode('')" title="点击退出"></span>
     </div>
@@ -392,7 +394,7 @@ body.dragging::after{content:"松手即上传 · 图片 / PDF / Word / 文本";p
     </div>
     <label style="display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--ink);line-height:1.6">
       <input type="checkbox" id="netsw" onchange="NET.setSw(this.checked)" style="width:auto;margin:3px 0 0;flex-shrink:0">
-      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">打开即用，不用再勾任何通道。每轮问答按需检索，不通就自动跳过，不影响文库作答。</span></span>
+      <span>开启联网参考<br><span style="color:var(--dim);font-size:11.5px">这里只是设置页 —— 平时在主界面<b>点一下「🌐 联网」按钮就能开关</b>，右键（手机长按）才进到这里。</span></span>
     </label>
 
     <div style="font-size:13px;color:var(--teal);margin:18px 0 4px">联网信息来源</div>
@@ -3668,7 +3670,66 @@ function applyNet(){
   const sw = document.getElementById("netsw");
   if(sw) sw.checked = NET.on;
 }
-function toggleNet(){ NET.setSw(!NET.on); }
+
+/* 轻提示：不打断操作，2.2 秒自动淡出 */
+let _netTipTimer = null;
+function netToast(msg, bad){
+  let el = document.getElementById("nettip");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "nettip";
+    el.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);bottom:36px;z-index:120;"
+      + "max-width:78vw;padding:10px 16px;border-radius:10px;font-size:13px;line-height:1.55;"
+      + "background:#1f2a30;color:#e8f2f4;box-shadow:0 8px 26px rgba(0,0,0,.3);opacity:0;"
+      + "transition:opacity .18s;pointer-events:none;text-align:center";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = bad ? "#7d2f28" : "#1f2a30";
+  el.style.opacity = "1";
+  if(_netTipTimer) clearTimeout(_netTipTimer);
+  _netTipTimer = setTimeout(function(){ el.style.opacity = "0"; }, 2200);
+}
+window.netToast = netToast;
+
+/* 探活：/health 不花钱，纯看「云函数活着吗」 */
+async function netPing(){
+  if(!(typeof window.cloudIsOwn === "function" && window.cloudIsOwn())) return false;
+  const cb = (typeof window.cloudBase === "function") ? window.cloudBase() : "";
+  if(!cb) return false;
+  try{
+    const r = await NET._t(cb + "/health?t=" + Date.now(), 6000);
+    if(!r.ok) return false;
+    const j = await r.json();
+    return !!(j && j.ok);
+  }catch(e){ return false; }
+}
+
+/* 🔴 2026-10-18（主公要求）：像大模型网站那样 —— **点一下就开**，不再弹面板让人勾。
+   右键（手机上长按）才进联网设置。
+   开的时候顺手探一下云函数活不活：连不上就自动关回去并说清楚，
+   不让人带着「开着其实连不上」的错觉去提问。 */
+let _netBusy = false, _netLongPressed = false;
+async function toggleNet(){
+  if(_netLongPressed){ _netLongPressed = false; return; }   /* 长按已经进设置了，别再切开关 */
+  /* 关闭永远立刻生效（不受探活中的忙状态影响） */
+  if(NET.on){
+    NET.setSw(false);
+    netToast("联网已关闭");
+    return;
+  }
+  if(_netBusy) return;
+  _netBusy = true;
+  NET.setSw(true);
+  netToast("联网已开启 · 下一条会自动检索");
+  const ok = await netPing();
+  _netBusy = false;
+  if(NET.on && !ok){
+    NET.setSw(false);
+    netToast("连不上本站云函数，已自动关掉联网（右键看设置）", true);
+  }
+}
+window.toggleNet = toggleNet;
 function openNet(){
   renderNetList(NET.lastProbe); renderNetStat(); renderGxmuMode(); applyNet();
   document.getElementById("netmask").style.display = "flex";
@@ -3983,6 +4044,26 @@ document.getElementById("mask").addEventListener("click", e=>{ if(e.target.id===
 document.getElementById("sesmask").addEventListener("click", e=>{ if(e.target.id==="sesmask") closeSess(); });
 document.getElementById("memmask").addEventListener("click", e=>{ if(e.target.id==="memmask") closeMem(); });
 document.getElementById("netmask").addEventListener("click", e=>{ if(e.target.id==="netmask") closeNet(); });
+
+/* 手机上长按「联网」= 右键 → 进联网设置（面板）。短按仍是开关。 */
+(function(){
+  const b = document.getElementById("netbtn");
+  if(!b) return;
+  let t = null;
+  b.addEventListener("touchstart", function(){
+    _netLongPressed = false;
+    if(t) clearTimeout(t);
+    t = setTimeout(function(){
+      t = null; _netLongPressed = true;
+      try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
+      openNet();
+    }, 520);
+  }, {passive:true});
+  const cancel = function(){ if(t){ clearTimeout(t); t = null; } };
+  b.addEventListener("touchend", cancel, {passive:true});
+  b.addEventListener("touchmove", cancel, {passive:true});
+  b.addEventListener("touchcancel", cancel, {passive:true});
+})();
 
 /* ============ 输入 ============ */
 const ta = document.getElementById("q");
