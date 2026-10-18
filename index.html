@@ -1514,6 +1514,17 @@ document.addEventListener("keydown", function(e){
     setTimeout(function(){ try{ window.showHelpOnce(); }catch(e){} }, 700);
   }
   /* 读不到配置时按「开锁」放行 —— 宁可让人进，也别把站长自己关在门外 */
+  /* 🔴 2026-10-18：后台改锁必须**当场**生效。
+     以前只要本次会话（sessionStorage.sz2_ok=1）进过站，后台再怎么「锁死 / 开锁」
+     刷新都没反应 —— 主公说的「又从后台开又锁都无效」有一半是这个。
+     现在把 access.json 的 签发时间 + 锁定状态 拼成指纹，指纹一变就作废本会话登录态。 */
+  try{
+    var _stamp = String((ACCESS && ACCESS.issuedAt) || 0) + "|" + String(!!(ACCESS && ACCESS.lock));
+    if(sessionStorage.getItem("sz2_accstamp") !== _stamp){
+      sessionStorage.removeItem("sz2_ok");
+      sessionStorage.setItem("sz2_accstamp", _stamp);
+    }
+  }catch(e){}
   var locked = !(ACCESS && ACCESS.lock === false);
   if(!locked) return pass();
   if(sessionStorage.getItem("sz2_ok") === "1") return pass();
