@@ -1,9 +1,45 @@
 {
-  "updated_at": "2026-10-21 20:38",
+  "updated_at": "2026-10-22 18:23",
   "count": 80,
   "include_qq": false,
   "note": "实时抓取自广西医科大学官网（云函数 /campus）；本文件为静态兜底",
   "items": [
+    {
+      "id": 240965,
+      "level": "P2",
+      "title": "关于组织观看电影《追光者》的通知",
+      "ddl": "",
+      "src": "学校通知公告",
+      "reason": "🔴 实时抓取自官网 · 学校通知公告",
+      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t240965.html",
+      "pin": 0,
+      "ts": 1792598400000,
+      "pubdate": "2026-10-22"
+    },
+    {
+      "id": 240955,
+      "level": "P2",
+      "title": "【名家讲坛-第211期】功能性有机生物材料与疾病治疗：策略、机制与应用",
+      "ddl": "",
+      "src": "学术讲座会议",
+      "reason": "🔴 实时抓取自官网 · 学术讲座会议",
+      "url": "https://www.gxmu.edu.cn/xwgk/jzhy/t240955.html",
+      "pin": 0,
+      "ts": 1792598400000,
+      "pubdate": "2026-10-22"
+    },
+    {
+      "id": 240954,
+      "level": "P2",
+      "title": "【名家讲坛-第210期】Aging, Tumor Stem Cells, and Tumor Microenvironment (TME) In Development and Treatment of Ovarian Cancer衰老、肿瘤干细胞与肿瘤微环境（TME）在卵巢癌发展和治疗中的作用",
+      "ddl": "",
+      "src": "学术讲座会议",
+      "reason": "🔴 实时抓取自官网 · 学术讲座会议",
+      "url": "https://www.gxmu.edu.cn/xwgk/jzhy/t240954.html",
+      "pin": 0,
+      "ts": 1792598400000,
+      "pubdate": "2026-10-22"
+    },
     {
       "id": 240879,
       "level": "P2",
@@ -593,18 +629,6 @@
       "pubdate": "2026-09-22"
     },
     {
-      "id": 239743,
-      "level": "P2",
-      "title": "广西医科大学2026年公开招聘项目聘用制工作人员公告（七）",
-      "ddl": "",
-      "src": "学校通知公告",
-      "reason": "🔴 实时抓取自官网 · 学校通知公告",
-      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t239743.html",
-      "pin": 0,
-      "ts": 1789920000000,
-      "pubdate": "2026-09-21"
-    },
-    {
       "id": 239774,
       "level": "P2",
       "title": "我校16个学位授予点全部通过国家合格评估",
@@ -905,18 +929,6 @@
       "pubdate": "2026-06-05"
     },
     {
-      "id": 235224,
-      "level": "P2",
-      "title": "广西医科大学靶向肿瘤学国家重点实验室2026年研究生学位（毕业）论文答辩公告",
-      "ddl": "",
-      "src": "学术讲座会议",
-      "reason": "🔴 实时抓取自官网 · 学术讲座会议",
-      "url": "https://www.gxmu.edu.cn/xwgk/jzhy/t235224.html",
-      "pin": 0,
-      "ts": 1780588800000,
-      "pubdate": "2026-06-05"
-    },
-    {
       "id": 235601,
       "level": "P2",
       "title": "广西医科大学信息与管理学院2026年研究生学位（毕业）论文答辩公告（第七批）",
@@ -924,18 +936,6 @@
       "src": "学术讲座会议",
       "reason": "🔴 实时抓取自官网 · 学术讲座会议",
       "url": "https://www.gxmu.edu.cn/xwgk/jzhy/t235601.html",
-      "pin": 0,
-      "ts": 1780502400000,
-      "pubdate": "2026-06-04"
-    },
-    {
-      "id": 235190,
-      "level": "P2",
-      "title": "【名家讲坛-第196期】线粒体异质性清除机制及线粒体置换",
-      "ddl": "",
-      "src": "学术讲座会议",
-      "reason": "🔴 实时抓取自官网 · 学术讲座会议",
-      "url": "https://www.gxmu.edu.cn/xwgk/jzhy/t235190.html",
       "pin": 0,
       "ts": 1780502400000,
       "pubdate": "2026-06-04"
