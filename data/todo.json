@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-26 23:20",
+  "updated_at": "2026-10-27 13:21",
   "count": 80,
   "include_qq": false,
   "note": "实时抓取自广西医科大学官网（云函数 /campus）；本文件为静态兜底",
@@ -120,18 +120,6 @@
       "src": "学校通知公告",
       "reason": "🔴 实时抓取自官网 · 学校通知公告",
       "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t241175.html",
-      "pin": 0,
-      "ts": 1792598400000,
-      "pubdate": "2026-10-22"
-    },
-    {
-      "id": 240965,
-      "level": "P2",
-      "title": "关于组织观看电影《追光者》的通知",
-      "ddl": "",
-      "src": "学校通知公告",
-      "reason": "🔴 实时抓取自官网 · 学校通知公告",
-      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t240965.html",
       "pin": 0,
       "ts": 1792598400000,
       "pubdate": "2026-10-22"
@@ -461,13 +449,13 @@
       "pubdate": "2026-10-10"
     },
     {
-      "id": 240379,
+      "id": 240358,
       "level": "P2",
-      "title": "广西医科大学关于举办“DRG 3.0落地实施与医保精细化管理能力提升培训班”的通知",
+      "title": "广西医科大学附属武鸣医院2026年公开招聘高层次人才公告",
       "ddl": "",
       "src": "学校通知公告",
       "reason": "🔴 实时抓取自官网 · 学校通知公告",
-      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t240379.html",
+      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t240358.html",
       "pin": 0,
       "ts": 1791561600000,
       "pubdate": "2026-10-10"
@@ -507,6 +495,18 @@
       "pin": 0,
       "ts": 1791475200000,
       "pubdate": "2026-10-09"
+    },
+    {
+      "id": 240203,
+      "level": "P2",
+      "title": "广西医科大学附属口腔医院2026年公开招聘工作人员结构化面试公告",
+      "ddl": "",
+      "src": "学校通知公告",
+      "reason": "🔴 实时抓取自官网 · 学校通知公告",
+      "url": "https://www.gxmu.edu.cn/xwgk/wwtz/t240203.html",
+      "pin": 0,
+      "ts": 1791388800000,
+      "pubdate": "2026-10-08"
     },
     {
       "id": 240254,
